@@ -5,8 +5,11 @@ from pathlib import Path
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.dummy import DummyRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-# LOAD DATASET
+# dataset loading
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "dengue_dataset.xlsx"
@@ -21,7 +24,6 @@ df = df.sort_values(["ward_id", "date"]).copy()
 
 print("\nDATASET LOADED:", df.shape)
 
-# FEATURE ENGINEERING
 
 print("\nCREATING WEATHER LAGS...")
 
@@ -57,7 +59,7 @@ for lag in range(1, 5):
         df.groupby("ward_id")["dengue_cases"].shift(lag)
     )
 
-# FUTURE PREDICTION TARGETS    
+# future prediction targets 
 
 print("\nCREATING 2, 3 AND 4 WEEK TARGETS...")
 
@@ -73,7 +75,7 @@ for horizon in [2, 3, 4]:
         .shift(-horizon)
     )
 
-    # SELECT MODEL FEATURES
+    # select model features
 
 numeric_features = [
     "population_density_sqkm",
@@ -110,9 +112,29 @@ categorical_features = [
 ]
 
 feature_columns = numeric_features + categorical_features
-# Chronological 80/20 split
+
 unique_dates = sorted(df["date"].unique())
 
 split_date = unique_dates[int(len(unique_dates) * 0.8)]
 
 print("\nTRAIN/TEST SPLIT DATE:", split_date)
+
+# Builing & training models
+
+for horizon in [2, 3, 4]:
+
+    print("\n" + "=" * 45)
+    print(f"TRAINING {horizon}-WEEK MODEL")
+    print("=" * 45)
+
+    target_column = f"target_{horizon}w"
+    target_date_column = f"target_date_{horizon}w"
+
+    required_columns = (
+        feature_columns +
+        [target_column, target_date_column]
+    )
+
+    data = df.dropna(subset=required_columns).copy()
+
+
