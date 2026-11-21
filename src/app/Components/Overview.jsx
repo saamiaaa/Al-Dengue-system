@@ -21,19 +21,26 @@ const PALETTE = [
 
 const normalizeCity = (c = "") => {
   const s = String(c).trim().toLowerCase();
-  if (s.includes("chittagong") || s.includes("chattogram")) return "chattogram";
-  return s;
+  return s.includes("chittagong") || s.includes("chattogram") ? "chattogram" : s;
 };
 
-const getTier = (raw = "") => {
+const getTier = (raw = "", cases = 0) => {
   const s = String(raw).toLowerCase();
-  return s.includes("crit") ? "Critical" : s.includes("high") ? "High" : s.includes("med") || s.includes("mod") ? "Medium" : "Low";
+  if (s.includes("crit")) return "Critical";
+  if (s.includes("high")) return "High";
+  if (s.includes("med") || s.includes("mod")) return "Medium";
+  if (s.includes("low")) return "Low";
+  if (cases >= 15) return "Critical";
+  if (cases >= 9) return "High";
+  if (cases >= 4) return "Medium";
+  return "Low";
 };
 
 const Overview = ({ selectedCity }) => {
   const [wardsByCity, setWardsByCity] = useState({});
   const [selectedWardId, setSelectedWardId] = useState("");
   const [forecastWindow, setForecastWindow] = useState("2 Weeks");
+  const [targetDate, setTargetDate] = useState("2025-08-18");
   const [prediction, setPrediction] = useState(null);
   const [apiError, setApiError] = useState("");
   const [wardsLoaded, setWardsLoaded] = useState(false);
@@ -45,6 +52,12 @@ const Overview = ({ selectedCity }) => {
         const res = await fetchWardsData();
         const rawList = Array.isArray(res) ? res : res.wards || res.data || [];
         if (!active) return;
+
+        // ব্যাকএন্ডের available_dates থেকে সক্রিয় আউটব্রেক তারিখ ("2025-08-18") বেছে নেওয়া
+        const dates = res.available_dates || [];
+        if (dates.length && !dates.includes("2025-08-18")) {
+          setTargetDate(res.latest_date || dates[0]);
+        }
 
         const grouped = {};
         rawList.forEach((w) => {
@@ -70,31 +83,36 @@ const Overview = ({ selectedCity }) => {
     [wardsByCity, selectedCity]
   );
 
-  const activeWardId = currentWards.some((w) => w.id === selectedWardId) ? selectedWardId : currentWards[0]?.id || "";
+  const activeWardId = currentWards.some((w) => w.id === selectedWardId)
+    ? selectedWardId
+    : currentWards[0]?.id || "";
   const baseWard = currentWards.find((w) => w.id === activeWardId) || currentWards[0] || null;
 
+  // এখানে targetDate ("2025-08-18") সহ কল করায় আর 0 predicted cases আসবে না
   useEffect(() => {
     if (!baseWard?.id) return;
     let active = true;
     (async () => {
       try {
-        const data = await fetchWardPrediction(baseWard.id);
+        const data = await fetchWardPrediction(baseWard.id, targetDate);
         if (active) { setPrediction(data); setApiError(""); }
       } catch (err) {
-        if (active) setApiError(err.message || "Prediction fetch failed");
+        if (active) { setPrediction(null); setApiError(err.message || "Prediction fetch failed"); }
       }
     })();
     return () => { active = false; };
-  }, [baseWard?.id]);
+  }, [baseWard?.id, targetDate]);
 
   const isLoading = !apiError && (!wardsLoaded || Boolean(baseWard?.id && prediction?.ward_id !== baseWard.id));
   const horizon = forecastWindow === "4 Weeks" ? 4 : forecastWindow === "3 Weeks" ? 3 : 2;
-  const forecast = prediction?.forecasts?.find((f) => f.horizon_weeks === horizon);
+  const forecast = prediction?.forecasts?.find((f) => Number(f.horizon_weeks) === horizon);
+
+  const predictedCases = forecast ? Math.round(Number(forecast.predicted_cases ?? 0)) : null;
+  const riskTier = forecast ? getTier(forecast.risk_level, predictedCases) : "Low";
+  const { score: riskScore, badge: riskBadgeStyle } = TIER_MAP[riskTier];
 
   const activeWard = useMemo(() => {
     const w = prediction?.weather || {};
-    const predCases = Math.round(Number(forecast?.predicted_cases ?? 0));
-
     const loggingDriver = prediction?.drivers?.find((d) => d.factor?.includes("Water-Logging"));
     const vulnDriver = prediction?.drivers?.find((d) => d.factor?.includes("Vulnerability"));
     const vulnParts = String(vulnDriver?.value || "").match(/([\d,]+)\/sqkm\s*\|\s*Sanitation\s*([\d.]+)/i);
@@ -104,13 +122,26 @@ const Overview = ({ selectedCity }) => {
     const logVal = Number(baseWard?.water_logging_risk_index ?? loggingDriver?.value ?? 0.5);
     const tempVal = Number(w.avg_temp_c ?? 0);
 
+    const historicalPeak = Number(
+      baseWard?.historical_peak_cases ??
+      baseWard?.peak_weekly_cases ??
+      baseWard?.peak_cases ??
+      baseWard?.max_weekly_cases ??
+      baseWard?.max_cases ??
+      baseWard?.peakCases ??
+      prediction?.historical_peak_cases ??
+      prediction?.peak_cases ??
+      prediction?.current_cases ??
+      0
+    );
+
     return {
       ...(baseWard || {}),
       id: baseWard?.id || activeWardId || "Loading...",
       name: baseWard?.name || activeWardId || "Loading Ward...",
       currentCases: Number(prediction?.current_cases ?? 0),
-      predictedCases: predCases,
-      peakCases: predCases,
+      predictedCases: predictedCases ?? 0,
+      peakCases: historicalPeak,
       laggedRainfall: Number(w.rainfall_mm ?? w.rainfall_prev_4w_sum ?? 0),
       humidity: Number(w.relative_humidity_pct ?? 0),
       avgTemp: tempVal,
@@ -120,28 +151,26 @@ const Overview = ({ selectedCity }) => {
       sanitation: sanVal,
       popDensity: popVal,
       populationDensity: popVal,
-      dataDate: prediction?.data_date || "",
+      dataDate: prediction?.data_date || targetDate,
     };
-  }, [baseWard, activeWardId, prediction, forecast]);
+  }, [baseWard, activeWardId, prediction, predictedCases, targetDate]);
 
-  const riskTier = getTier(forecast?.risk_level);
-  const { score: riskScore, badge: riskBadgeStyle } = TIER_MAP[riskTier];
   const earlyWarningDays = forecastWindow === "4 Weeks" ? 26 : forecastWindow === "3 Weeks" ? 21 : 15;
 
   const drivers = useMemo(() => {
     if (Array.isArray(prediction?.drivers) && prediction.drivers.length) {
       return prediction.drivers.slice(0, 4).map((d, i) => ({
-        label: d.factor || d.label || `Driver ${i + 1}`,
-        code: d.value || null,
-        pct: Math.round(Number(d.score ?? d.pct ?? 25)),
+        label: d.factor || d.label || `Factor ${i + 1}`,
+        code: d.value ? `${d.value} • Risk Index` : "Risk Severity Index",
+        pct: Math.min(100, Math.max(0, Math.round(Number(d.score ?? 0)))),
         ...PALETTE[i % 4],
       }));
     }
     return [
-      { label: "Multi-Week Rainfall", code: "rainfall_mm", pct: 35, ...PALETTE[0] },
-      { label: "Water-Logging Risk", code: "water_logging_risk_index", pct: 30, ...PALETTE[1] },
-      { label: "Average Temperature", code: "avg_temp_c", pct: 20, ...PALETTE[2] },
-      { label: "Relative Humidity", code: "relative_humidity_pct", pct: 15, ...PALETTE[3] },
+      { label: "Multi-Week Rainfall", code: "Awaiting live telemetry", pct: 0, ...PALETTE[0] },
+      { label: "Water-Logging Risk", code: "Awaiting live telemetry", pct: 0, ...PALETTE[1] },
+      { label: "Average Temperature", code: "Awaiting live telemetry", pct: 0, ...PALETTE[2] },
+      { label: "Relative Humidity", code: "Awaiting live telemetry", pct: 0, ...PALETTE[3] },
     ];
   }, [prediction]);
 
@@ -153,19 +182,23 @@ const Overview = ({ selectedCity }) => {
           <span className="font-semibold text-slate-700">
             {apiError
               ? `API Disconnected: ${apiError}`
-              : `Live ML API Connected • ${selectedCity} (${currentWards.length} wards)`}
+              : `Live ML API Connected • ${selectedCity} (${currentWards.length} wards) • Date: ${prediction?.data_date || targetDate}`}
           </span>
         </div>
 
         {isLoading ? (
           <span className="text-red-600 font-semibold animate-pulse">Fetching live ML predictions...</span>
-        ) : (
-          forecast && (
-            <span className="font-bold text-slate-800">
-              {forecastWindow} Forecast:{" "}
-              <span className="text-red-600">{Math.round(forecast.predicted_cases)} predicted cases</span>
+        ) : forecast && !apiError ? (
+          <span className="font-bold text-slate-800">
+            {forecastWindow} Forecast:{" "}
+            <span className="text-red-600">
+              {predictedCases} predicted cases ({riskTier} Risk)
             </span>
-          )
+          </span>
+        ) : (
+          <span className="text-amber-700 font-semibold">
+            Model prediction unavailable for selected horizon
+          </span>
         )}
       </div>
 
@@ -185,8 +218,8 @@ const Overview = ({ selectedCity }) => {
         forecastWindow={forecastWindow}
         activeWard={activeWard}
         earlyWarningDays={earlyWarningDays}
-        predictedCases={forecast?.predicted_cases}
-        isLiveApi={!apiError}
+        predictedCases={predictedCases}
+        isLiveApi={!apiError && Boolean(forecast)}
       />
 
       <OverviewAnalytics activeWard={activeWard} drivers={drivers} />
