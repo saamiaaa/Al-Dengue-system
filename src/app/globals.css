@@ -1,3 +1,21 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+
+.bg-white\/95,
+.bg-white\/90 {
+  background-color: rgba(255, 248, 248, 0.78) !important; 
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(254, 205, 211, 0.7) !important;
+  box-shadow: 0 8px 32px rgba(136, 19, 55, 0.07) !important;
+}
+
+body {
+  font-family: var(--font-sans), sans-serif;
+}
+
+h1, h2, h3, h4, .font-heading {
+  font-family: var(--font-heading), sans-serif;
+  letter-spacing: -0.02em;
+}
