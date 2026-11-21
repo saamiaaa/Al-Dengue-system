@@ -56,3 +56,19 @@ for lag in range(1, 5):
     df[f"dengue_cases_lag_{lag}"] = (
         df.groupby("ward_id")["dengue_cases"].shift(lag)
     )
+
+# FUTURE PREDICTION TARGETS    
+
+print("\nCREATING 2, 3 AND 4 WEEK TARGETS...")
+
+for horizon in [2, 3, 4]:
+
+    df[f"target_{horizon}w"] = (
+        df.groupby("ward_id")["dengue_cases"]
+        .shift(-horizon)
+    )
+
+    df[f"target_date_{horizon}w"] = (
+        df.groupby("ward_id")["date"]
+        .shift(-horizon)
+    )
