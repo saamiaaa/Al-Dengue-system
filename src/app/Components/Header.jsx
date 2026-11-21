@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useSyncExternalStore } from "react";
+import { CITIES } from "../DengueData";
 
 const emptySubscribe = () => () => {};
 
@@ -13,7 +14,6 @@ const Header = ({
   onLogout,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const cities = ["Dhaka", "Chattogram", "Rajshahi", "Khulna", "Sylhet", "Barishal"];
 
   const isClient = useSyncExternalStore(
     emptySubscribe,
@@ -41,8 +41,8 @@ const Header = ({
     : "Good Evening!";
 
   return (
-    <header className="w-full bg-white border-b border-gray-200 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-20">
-      {/* বাম পাশ: Dashboard বাটন + Greeting */}
+    <header className="w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3 sticky top-0 z-20">
+      
       <div className="flex items-center gap-3">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -77,9 +77,9 @@ const Header = ({
             id="city-select"
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-500 cursor-pointer"
           >
-            {cities.map((city) => (
+            {CITIES.map((city) => (
               <option key={city} value={city}>
                 {city}
               </option>
@@ -87,7 +87,31 @@ const Header = ({
           </select>
         </div>
 
-        
+        {onOpenAuth && (
+          <>
+            <span className="text-gray-300">|</span>
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+                  {user.name}
+                </span>
+                <button
+                  onClick={onLogout}
+                  className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 font-medium transition cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition shadow-sm cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       
@@ -123,7 +147,7 @@ const Header = ({
                 }}
                 className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm bg-gray-50 font-medium text-gray-800"
               >
-                {cities.map((city) => (
+                {CITIES.map((city) => (
                   <option key={city} value={city}>
                     {city}
                   </option>
