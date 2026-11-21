@@ -72,3 +72,41 @@ for horizon in [2, 3, 4]:
         df.groupby("ward_id")["date"]
         .shift(-horizon)
     )
+
+    # SELECT MODEL FEATURES
+
+numeric_features = [
+    "population_density_sqkm",
+    "water_logging_risk_index",
+    "sanitation_score",
+
+    "avg_temp_c",
+    "max_temp_c",
+    "min_temp_c",
+    "relative_humidity_pct",
+    "rainfall_mm",
+
+    "rainfall_lag_1",
+    "rainfall_lag_2",
+    "rainfall_lag_3",
+    "rainfall_lag_4",
+
+    "rainfall_prev_2w_sum",
+    "rainfall_prev_3w_sum",
+    "rainfall_prev_4w_sum",
+
+    "temp_lag_1",
+    "humidity_lag_1",
+
+    "dengue_cases_lag_1",
+    "dengue_cases_lag_2",
+    "dengue_cases_lag_3",
+    "dengue_cases_lag_4"
+]
+
+categorical_features = [
+    "city",
+    "ward_id"
+]
+
+feature_columns = numeric_features + categorical_features
