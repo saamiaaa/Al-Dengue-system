@@ -179,3 +179,69 @@ if (idx === -1) return null;
 
     return { date: cur.date, current_cases: cur.dengue_cases, features };
 }
+
+function getMainDrivers(f) {
+    const drivers = [
+        {
+            factor: "Multi-Week Rainfall",
+            value: `${f.rainfall_mm} mm now | ${f.rainfall_prev_4w_sum} mm (prev 4w)`,
+            score: Math.min(100, Math.round(((f.rainfall_mm + f.rainfall_prev_4w_sum) / 350) * 100)),
+            impact:
+                f.rainfall_prev_4w_sum >= 150 || f.rainfall_mm >= 60
+                    ? "High"
+                    : f.rainfall_prev_4w_sum >= 50
+                        ? "Moderate"
+                        : "Low",
+            reason: "Stagnant rainwater over 2–4 weeks drives Aedes mosquito breeding cycles.",
+        },
+        {
+            factor: "Relative Humidity",
+            value: `${f.relative_humidity_pct}%`,
+            score: Math.min(100, Math.max(5, Math.round(((f.relative_humidity_pct - 40) / 55) * 100))),
+            impact:
+                f.relative_humidity_pct >= 80
+                    ? "High"
+                    : f.relative_humidity_pct >= 68
+                        ? "Moderate"
+                        : "Low",
+            reason: "High humidity keeps adult mosquitoes alive and active longer.",
+        },
+        {
+            factor: "Water-Logging Risk",
+            value: f.water_logging_risk_index.toFixed(2),
+            score: Math.round(f.water_logging_risk_index * 100),
+            impact:
+                f.water_logging_risk_index >= 0.7
+                    ? "High"
+                    : f.water_logging_risk_index >= 0.45
+                        ? "Moderate"
+                        : "Low",
+            reason: "Poor drainage traps rainwater in neighborhood drains after rainfall.",
+        },
+        {
+            factor: "Average Temperature",
+            value: `${f.avg_temp_c} °C`,
+            score: Math.min(100, Math.max(10, Math.round(((f.avg_temp_c - 15) / 20) * 100))),
+            impact:
+                f.avg_temp_c >= 27 && f.avg_temp_c <= 33
+                    ? "High"
+                    : f.avg_temp_c >= 23
+                        ? "Moderate"
+                        : "Low",
+            reason: "Warm weather (27 - 33 °C) accelerates egg hatching and virus incubation.",
+        },
+        {
+            factor: "Ward Vulnerability",
+            value: `${f.population_density_sqkm.toLocaleString()}/sqkm | Sanitation ${f.sanitation_score}`,
+            score: Math.min(
+                100,
+                Math.round((f.population_density_sqkm / 75000) * 60 + (1 - f.sanitation_score) * 40)
+            ),
+            impact:
+                f.population_density_sqkm >= 50000 || f.sanitation_score <= 0.45 ? "High" : "Moderate",
+            reason: "High crowding and weaker waste collection speed up local outbreaks.",
+        },
+    ];
+
+    return drivers.sort((a, b) => b.score - a.score);
+}
