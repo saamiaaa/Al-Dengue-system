@@ -248,6 +248,7 @@ function getMainDrivers(f) {
 
 
 
+
 // 3. CACHED CALLS TO PYTHON FASTAPI (api.py)
 
 function getCached(key) {
@@ -297,6 +298,8 @@ async function fetchMlByWardLatest(wardId, horizon) {
     return fetchMlByFeatures(horizon, built.features);
 }
 
+
+
 // 4. ROUTES FOR NEXT.JS UI
 
 app.get("/", (req, res) => {
@@ -340,3 +343,136 @@ app.get("/api/wards", (req, res) => {
     });
 });
 
+
+
+
+
+// Direct latest-date prediction (uses api.py GET /predict/ward/{ward_id}/{horizon})
+app.get("/api/predict/ward/:wardId/:horizon", async (req, res) => {
+    try {
+        const { wardId } = req.params;
+        const horizon = Number(req.params.horizon);
+        if (![2, 3, 4].includes(horizon)) {
+            return res.status(400).json({ success: false, message: "Horizon must be 2, 3, or 4" });
+        }
+
+        const built = buildWardFeatures(wardId);
+        if (!built) {
+            return res.status(404).json({ success: false, message: "Ward not found" });
+        }
+
+        const prediction = await fetchMlByWardLatest(wardId, horizon);
+
+        res.json({
+            success: true,
+            ward_id: wardId,
+            city: built.features.city,
+            reference_date: built.date,
+            current_cases: built.current_cases,
+            prediction,
+            weather: {
+                avg_temp_c: built.features.avg_temp_c,
+                rainfall_mm: built.features.rainfall_mm,
+                relative_humidity_pct: built.features.relative_humidity_pct,
+                rainfall_lag_1: built.features.rainfall_lag_1,
+                rainfall_lag_2: built.features.rainfall_lag_2,
+                rainfall_lag_3: built.features.rainfall_lag_3,
+                rainfall_lag_4: built.features.rainfall_lag_4,
+                rainfall_prev_4w_sum: built.features.rainfall_prev_4w_sum,
+            },
+            drivers: getMainDrivers(built.features),
+            cache_stats: cacheStats,
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Flexible prediction (supports any date + What-If weather sliders)
+app.post("/api/predict", async (req, res) => {
+    try {
+        const { ward_id, date, horizon = 3, weather_override = {} } = req.body;
+        const h = Number(horizon);
+
+        if (!ward_id) {
+            return res.status(400).json({ success: false, message: "ward_id is required" });
+        }
+        if (![2, 3, 4].includes(h)) {
+            return res.status(400).json({ success: false, message: "horizon must be 2, 3, or 4" });
+        }
+
+        const built = buildWardFeatures(ward_id, date, weather_override);
+        if (!built) {
+            return res.status(404).json({ success: false, message: "Ward or date not found" });
+        }
+
+        const prediction = await fetchMlByFeatures(h, built.features);
+
+        res.json({
+            success: true,
+            ward_id,
+            city: built.features.city,
+            reference_date: built.date,
+            current_cases: built.current_cases,
+            prediction,
+            weather: {
+                avg_temp_c: built.features.avg_temp_c,
+                rainfall_mm: built.features.rainfall_mm,
+                relative_humidity_pct: built.features.relative_humidity_pct,
+                rainfall_lag_1: built.features.rainfall_lag_1,
+                rainfall_lag_2: built.features.rainfall_lag_2,
+                rainfall_lag_3: built.features.rainfall_lag_3,
+                rainfall_lag_4: built.features.rainfall_lag_4,
+                rainfall_prev_4w_sum: built.features.rainfall_prev_4w_sum,
+            },
+            drivers: getMainDrivers(built.features),
+            cache_stats: cacheStats,
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Full 2-to-4-week early-warning window in a single request
+app.post("/api/predict-window", async (req, res) => {
+    try {
+        const { ward_id, date, weather_override = {} } = req.body;
+        if (!ward_id) {
+            return res.status(400).json({ success: false, message: "ward_id is required" });
+        }
+
+        const built = buildWardFeatures(ward_id, date, weather_override);
+        if (!built) {
+            return res.status(404).json({ success: false, message: "Ward not found" });
+        }
+
+        const [w2, w3, w4] = await Promise.all([
+            fetchMlByFeatures(2, built.features),
+            fetchMlByFeatures(3, built.features),
+            fetchMlByFeatures(4, built.features),
+        ]);
+
+        res.json({
+            success: true,
+            ward_id,
+            city: built.features.city,
+            reference_date: built.date,
+            current_cases: built.current_cases,
+            forecasts: { "2w": w2, "3w": w3, "4w": w4 },
+            weather: {
+                avg_temp_c: built.features.avg_temp_c,
+                rainfall_mm: built.features.rainfall_mm,
+                relative_humidity_pct: built.features.relative_humidity_pct,
+                rainfall_lag_1: built.features.rainfall_lag_1,
+                rainfall_lag_2: built.features.rainfall_lag_2,
+                rainfall_lag_3: built.features.rainfall_lag_3,
+                rainfall_lag_4: built.features.rainfall_lag_4,
+                rainfall_prev_4w_sum: built.features.rainfall_prev_4w_sum,
+            },
+            drivers: getMainDrivers(built.features),
+            cache_stats: cacheStats,
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
