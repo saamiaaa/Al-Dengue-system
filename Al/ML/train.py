@@ -167,3 +167,14 @@ for horizon in [2, 3, 4]:
              categorical_features)
         ]
     )
+
+ # Random Forest model
+    model = Pipeline([
+        ("preprocessor", preprocessor),
+        ("regressor", RandomForestRegressor(
+            n_estimators=200,
+            min_samples_leaf=2,
+            random_state=42,
+            n_jobs=-1
+        ))
+    ])
