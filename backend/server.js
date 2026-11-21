@@ -192,7 +192,7 @@ function getMainDrivers(f) {
                     : f.rainfall_prev_4w_sum >= 50
                         ? "Moderate"
                         : "Low",
-            reason: "Stagnant rainwater over 2–4 weeks drives Aedes mosquito breeding cycles.",
+            reason: "Stagnant rainwater over 2 - 4 weeks drives Aedes mosquito breeding cycles.",
         },
         {
             factor: "Relative Humidity",
@@ -245,3 +245,98 @@ function getMainDrivers(f) {
 
     return drivers.sort((a, b) => b.score - a.score);
 }
+
+
+
+// 3. CACHED CALLS TO PYTHON FASTAPI (api.py)
+
+function getCached(key) {
+    const item = predictionCache.get(key);
+    if (item && Date.now() - item.ts < CACHE_TTL_MS) {
+        cacheStats.hits += 1;
+        return item.data;
+    }
+    return null;
+}
+
+function setCached(key, data) {
+    if (predictionCache.size >= MAX_CACHE_SIZE) {
+        predictionCache.delete(predictionCache.keys().next().value);
+    }
+    predictionCache.set(key, { data, ts: Date.now() });
+}
+
+async function fetchMlByFeatures(horizon, features) {
+    const key = `feat:${horizon}:${JSON.stringify(features)}`;
+    const hit = getCached(key);
+    if (hit) return { ...hit, cached: true };
+
+    cacheStats.misses += 1;
+    const res = await fetch(`${ML_API_URL}/predict/${horizon}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(features),
+    });
+
+    if (!res.ok) {
+        throw new Error(`ML API (${res.status}): ${await res.text()}`);
+    }
+
+    const data = await res.json();
+    setCached(key, data);
+    return { ...data, cached: false };
+}
+
+async function fetchMlByWardLatest(wardId, horizon) {
+    const built = buildWardFeatures(wardId);
+
+    if (!built) {
+        throw new Error("Ward not found or insufficient historical data");
+    }
+
+    return fetchMlByFeatures(horizon, built.features);
+}
+
+// 4. ROUTES FOR NEXT.JS UI
+
+app.get("/", (req, res) => {
+    res.json({ message: "Dengue Prediction Backend API is running" });
+});
+
+// Check Express + Python FastAPI + Cache health
+app.get("/api/health", async (req, res) => {
+    let mlService = { status: "unreachable" };
+    try {
+        const r = await fetch(`${ML_API_URL}/health`);
+        if (r.ok) mlService = await r.json();
+    } catch (_) { }
+
+    res.json({
+        success: true,
+        backend: "healthy",
+        wards_loaded: wardRecords.size,
+        cache_stats: cacheStats,
+        ml_service: mlService,
+    });
+});
+
+// Cities, wards, and selectable dates for dropdowns
+app.get("/api/wards", (req, res) => {
+    const cities = {};
+    const wardsFlat = [];
+
+    for (const [city, wards] of cityWards.entries()) {
+        cities[city] = wards;
+        wardsFlat.push(...wards);
+    }
+
+    res.json({
+        success: true,
+        total_wards: wardsFlat.length,
+        cities,
+        wards: wardsFlat,
+        latest_date: availableDates[availableDates.length - 1],
+        available_dates: availableDates.slice(-52), // Last 52 weeks (2025 full year)
+    });
+});
+
