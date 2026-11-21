@@ -52,7 +52,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata = {
-  title: "EpiAlert AI | Dengue Surveillance Dashboard",
+  title: "Dengue Sense | Dengue Surveillance Dashboard",
   description: "Municipal Dengue Vector & Outbreak Telemetry",
 };
 
