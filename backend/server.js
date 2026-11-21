@@ -35,11 +35,11 @@ app.get("/api/health", (req, res) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 
-// =========================================================
 // 1. IN-MEMORY DATA & PREDICTION CACHE (No MongoDB needed)
-// =========================================================
-const wardRecords = new Map(); // ward_id -> sorted weekly rows
-const cityWards = new Map();   // city -> ward metadata list
+
+
+const wardRecords = new Map();
+const cityWards = new Map();
 let availableDates = [];
 
 const predictionCache = new Map();
@@ -47,8 +47,69 @@ const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_CACHE_SIZE = 500;
 const cacheStats = { hits: 0, misses: 0 };
 
+
+function formatDate(rawDate) {
+    if (rawDate instanceof Date && !isNaN(rawDate)) {
+        return rawDate.toISOString().slice(0, 10);
+    }
+    if (typeof rawDate === "number") {
+        const d = XLSX.SSF.parse_date_code(rawDate);
+        return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+    }
+    return String(rawDate).slice(0, 10);
+}
+
+function loadDataset() {
+    console.log("Loading dataset:", DATASET_PATH);
+    const wb = XLSX.readFile(DATASET_PATH, { cellDates: true });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    const dateSet = new Set();
+
+    for (const r of rows) {
+        const rec = {
+            date: formatDate(r.date),
+            city: String(r.city),
+            ward_id: String(r.ward_id),
+            population_density_sqkm: Number(r.population_density_sqkm),
+            water_logging_risk_index: Number(r.water_logging_risk_index),
+            sanitation_score: Number(r.sanitation_score),
+            avg_temp_c: Number(r.avg_temp_c),
+            max_temp_c: Number(r.max_temp_c),
+            min_temp_c: Number(r.min_temp_c),
+            rainfall_mm: Number(r.rainfall_mm),
+            relative_humidity_pct: Number(r.relative_humidity_pct),
+            dengue_cases: Number(r.dengue_cases),
+        };
+
+        dateSet.add(rec.date);
+        if (!wardRecords.has(rec.ward_id)) wardRecords.set(rec.ward_id, []);
+        wardRecords.get(rec.ward_id).push(rec);
+    }
+
+    for (const [wardId, list] of wardRecords.entries()) {
+        list.sort((a, b) => a.date.localeCompare(b.date));
+        const first = list[0];
+        if (!cityWards.has(first.city)) cityWards.set(first.city, []);
+        cityWards.get(first.city).push({
+            ward_id: wardId,
+            city: first.city,
+            population_density_sqkm: first.population_density_sqkm,
+            water_logging_risk_index: first.water_logging_risk_index,
+            sanitation_score: first.sanitation_score,
+        });
+    }
+
+    for (const wards of cityWards.values()) {
+        wards.sort((a, b) => a.ward_id.localeCompare(b.ward_id));
+    }
+
+    // Skip first 4 weeks so every selectable date has complete 4-week lag history
+    availableDates = Array.from(dateSet).sort().slice(4);
+    console.log(
+        `Loaded ${rows.length} rows | ${wardRecords.size} wards | ${cityWards.size} cities`
+    );
+}
+
 app.listen(PORT, () => {
     console.log(`Backend running at http://localhost:${PORT}`);
 });
-
-
