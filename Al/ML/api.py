@@ -34,4 +34,13 @@ def home():
         "available_models": list(models.keys())
     }
 
+# checking health
+
+@app.get("/health")
+def health_check():
+
+    return {
+        "status": "healthy",
+        "models_loaded": list(models.keys())
+    }
 
