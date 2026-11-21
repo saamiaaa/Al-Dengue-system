@@ -185,3 +185,23 @@ for horizon in [2, 3, 4]:
     baseline_predictions = baseline.predict(
         X_test[numeric_features]
     )
+
+# Train the actual ML model
+    model.fit(X_train, y_train)
+
+    predictions = model.predict(X_test)
+
+    predictions = np.maximum(predictions, 0)
+
+    # Evaluation
+    mae = mean_absolute_error(y_test, predictions)
+
+    rmse = np.sqrt(
+        mean_squared_error(y_test, predictions)
+    )
+
+    r2 = r2_score(y_test, predictions)
+
+    baseline_mae = mean_absolute_error(
+        y_test, baseline_predictions
+    )
