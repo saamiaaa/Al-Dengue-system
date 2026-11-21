@@ -7,27 +7,38 @@ const Header = ({
   selectedCity,
   setSelectedCity,
 }) => {
-  const cities = ["Chattogram", "Dhaka", "Rajshahi", "Khulna", "Sylhet"];
+  const cities = [
+    "Chattogram",
+    "Dhaka North",
+    "Dhaka South",
+    "Rajshahi",
+    "Khulna",
+    "Sylhet",
+  ];
   const [greeting, setGreeting] = useState("Welcome!");
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting("Good Morning!");
-    else if (hour < 18) setGreeting("Good Afternoon!");
-    else setGreeting("Good Evening!");
+    const updateGreeting = () => {
+      const hour = new Date().getHours();
+      if (hour < 12) setGreeting("Good Morning!");
+      else if (hour < 18) setGreeting("Good Afternoon!");
+      else setGreeting("Good Evening!");
+    };
+
+    const timer = setTimeout(updateGreeting, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   return (
     <header className="sticky top-0 z-20 bg-white/75 backdrop-blur-xl border-b border-white/60 shadow-sm px-4 sm:px-6 py-3.5 transition-all">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* বাম পাশ: মডার্ন মেনু বাটন + গ্রিটিং */}
         <div className="flex items-center gap-4">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-rose-950 hover:from-red-600 hover:to-rose-600 text-white font-semibold text-sm shadow-md hover:shadow-lg hover:shadow-red-600/25 transition-all duration-300 cursor-pointer"
           >
             <span className="text-base leading-none">☰</span>
-            <span>Dashboard</span>
+            <span>EpiAlert AI</span>
           </button>
 
           <div className="hidden sm:block h-8 w-px bg-slate-300/70" />
@@ -43,13 +54,12 @@ const Header = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 font-medium">
-              Latest dengue vector & outbreak telemetry
+              Latest dengue vector &amp; outbreak telemetry
             </p>
           </div>
         </div>
 
-        {/* ডান পাশ: মডার্ন সিটি সিলেক্টর কন্ট্রোল */}
-        <div className="flex items-center gap-2.5 bg-white/80 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-2 bg-white/80 backdrop-blur-md px-3.5 py-2 rounded-xl border border-slate-200/80 shadow-xs">
           <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
             📍 <span className="hidden sm:inline">City:</span>
           </span>
