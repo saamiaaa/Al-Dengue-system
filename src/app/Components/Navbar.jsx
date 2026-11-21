@@ -27,12 +27,17 @@ const Navbar = () => {
             Real-time vector risk scoring across 60 municipal wards in Bangladesh. Select a module from the menu or jump straight into the live surveillance dashboard for <strong>{selectedCity}</strong>.
           </p>
           <div className="pt-2 flex flex-wrap justify-center gap-3">
-            <button
-              onClick={() => setActiveTab("Overview")}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-semibold text-sm shadow-md hover:shadow-lg transition cursor-pointer"
-            >
-              📊 Open Overview Dashboard
-            </button>
+            <button type="button" onClick={() => setActiveTab("Overview")}
+  className="group relative inline-flex items-center gap-2.5 px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 text-white font-bold text-sm shadow-lg shadow-red-600/30 hover:shadow-xl hover:shadow-red-500/40 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 cursor-pointer select-none"
+>
+  <span className="text-base transition-transform duration-200 group-hover:scale-110">
+    📊
+  </span>
+  <span>Open Overview Dashboard</span>
+  <span className="transition-transform duration-200 group-hover:translate-x-1">
+    →
+  </span>
+</button>
           </div>
         </div>
       );
