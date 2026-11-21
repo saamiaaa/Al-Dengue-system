@@ -157,3 +157,13 @@ for horizon in [2, 3, 4]:
     if len(train_data) == 0 or len(test_data) == 0:
         print("Not enough data. Skipping horizon.")
         continue
+    
+# Convert city and ward names into numeric features
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("numeric", "passthrough", numeric_features),
+            ("categorical",
+             OneHotEncoder(handle_unknown="ignore"),
+             categorical_features)
+        ]
+    )
