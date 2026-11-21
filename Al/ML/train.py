@@ -218,7 +218,6 @@ for horizon in [2, 3, 4]:
 
     print("\nRISK THRESHOLDS:", thresholds)
 
-    # Feature importance
     forest = model.named_steps["regressor"]
 
     feature_names = (
@@ -230,3 +229,23 @@ for horizon in [2, 3, 4]:
         forest.feature_importances_,
         index=feature_names
     ).sort_values(ascending=False)
+
+    print("\nTOP 10 IMPORTANT FEATURES:")
+    print(importance.head(10))
+
+    model_package = {
+        "model": model,
+        "features": feature_columns,
+        "numeric_features": numeric_features,
+        "categorical_features": categorical_features,
+        "risk_thresholds": thresholds,
+        "horizon": horizon
+    }
+
+    model_path = MODEL_DIR / f"dengue_model_{horizon}w.joblib"
+
+    joblib.dump(model_package, model_path)
+
+    print("\nMODEL SAVED:", model_path)
+
+    print("\nALL TRAINING TASKS FINISHED!")
