@@ -33,12 +33,6 @@ const Navbar = () => {
             >
               📊 Open Overview Dashboard
             </button>
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition cursor-pointer"
-            >
-              ☰ Explore All Modules
-            </button>
           </div>
         </div>
       );
@@ -77,7 +71,7 @@ const Navbar = () => {
     <div
       className="min-h-screen flex flex-col bg-cover bg-center bg-fixed"
       style={{
-        backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.72), rgba(248, 250, 252, 0.82)), url('/dengue.jpg')`,
+        backgroundImage: `linear-gradient(rgba(241, 245, 249, 0.35), rgba(248, 250, 252, 0.45)), url('/dengue.jpg')`,
       }}
     >
       <Header

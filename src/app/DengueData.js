@@ -110,7 +110,7 @@ export const MONSOON_TRENDS = {
     { week: "Aug 18", rainfall: 84.4, cases: 124 },
     { week: "Aug 25", rainfall: 92.3, cases: 193 },
   ],
-  Gazipur: [
+  "Gazipur": [
     { week: "Jul 07", rainfall: 117.3, cases: 44 },
     { week: "Jul 14", rainfall: 51.2, cases: 45 },
     { week: "Jul 21", rainfall: 46.3, cases: 36 },
@@ -120,7 +120,7 @@ export const MONSOON_TRENDS = {
     { week: "Aug 18", rainfall: 86.0, cases: 26 },
     { week: "Aug 25", rainfall: 93.1, cases: 56 },
   ],
-  Narayanganj: [
+  "Narayanganj": [
     { week: "Jul 07", rainfall: 112.1, cases: 41 },
     { week: "Jul 14", rainfall: 55.2, cases: 41 },
     { week: "Jul 21", rainfall: 47.1, cases: 21 },
@@ -132,7 +132,7 @@ export const MONSOON_TRENDS = {
   ],
 };
 
-// Chronological Split (Train: 2016-2023, Test: 2024-2025) আসল রেজাল্ট
+
 export const MODEL_VALIDATION_METRICS = [
   {
     model: "Gradient Boosting (2–4 Wk Lag + Ward Features)",

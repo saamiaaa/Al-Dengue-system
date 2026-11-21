@@ -11,9 +11,8 @@ const Header = ({
     "Chattogram",
     "Dhaka North",
     "Dhaka South",
-    "Rajshahi",
-    "Khulna",
-    "Sylhet",
+    "Gazipur",
+    "Narayanganj",
   ];
   const [greeting, setGreeting] = useState("Welcome!");
 
