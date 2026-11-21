@@ -1,26 +1,22 @@
-
 import pandas as pd
+import numpy as np
+import joblib
 from pathlib import Path
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
 
-# Find the folder where this Python file is located
+# LOAD DATASET
+
 BASE_DIR = Path(__file__).resolve().parent
-
-# Locate the Excel dataset
 DATA_PATH = BASE_DIR / "data" / "dengue_dataset.xlsx"
+MODEL_DIR = BASE_DIR / "models"
+MODEL_DIR.mkdir(exist_ok=True)
 
-# Load the dataset
 df = pd.read_excel(DATA_PATH)
 
-print("\n===== DENGUE DATASET =====")
+df["date"] = pd.to_datetime(df["date"])
 
-print(df.head())
+df = df.sort_values(["ward_id", "date"]).copy()
 
-print("\nDataset Shape:")
-print(df.shape)
-
-print("\nColumn Names:")
-print(df.columns.tolist())
-
-print("\nDataset Information:")
-df.info()
-
+print("\nDATASET LOADED:", df.shape)
