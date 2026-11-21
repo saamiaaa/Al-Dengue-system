@@ -137,4 +137,11 @@ for horizon in [2, 3, 4]:
 
     data = df.dropna(subset=required_columns).copy()
 
+    train_data = data[
+        data[target_date_column] < split_date
+    ]
+
+    test_data = data[
+        data["date"] >= split_date
+    ]
 
