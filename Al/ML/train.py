@@ -110,3 +110,9 @@ categorical_features = [
 ]
 
 feature_columns = numeric_features + categorical_features
+# Chronological 80/20 split
+unique_dates = sorted(df["date"].unique())
+
+split_date = unique_dates[int(len(unique_dates) * 0.8)]
+
+print("\nTRAIN/TEST SPLIT DATE:", split_date)
