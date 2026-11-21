@@ -25,16 +25,13 @@ print("\nDATASET LOADED:", df.shape)
 
 print("\nCREATING WEATHER LAGS...")
 
-
 grouped = df.groupby("ward_id", sort=False)
-
 
 # Previous 1-4 weeks of rainfall
 for lag in range(1, 5):
     df[f"rainfall_lag_{lag}"] = (
         grouped["rainfall_mm"].shift(lag)
     )
-
 
 # Previous 2, 3 and 4 weeks total rainfall
 for window in [2, 3, 4]:
@@ -44,3 +41,8 @@ for window in [2, 3, 4]:
             lambda s: s.shift(1).rolling(window).sum()
         )
     )
+
+# Previous temperature and humidity
+df["temp_lag_1"] = (
+    df.groupby("ward_id")["avg_temp_c"].shift(1)
+)
