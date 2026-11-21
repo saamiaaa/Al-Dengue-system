@@ -205,3 +205,28 @@ for horizon in [2, 3, 4]:
     baseline_mae = mean_absolute_error(
         y_test, baseline_predictions
     )
+    print("\nMODEL RESULTS")
+    print("Random Forest MAE:", round(mae, 3))
+    print("Random Forest RMSE:", round(rmse, 3))
+    print("Random Forest R2:", round(r2, 3))
+    print("Baseline MAE:", round(baseline_mae, 3))
+
+    # Risk thresholds based on training data
+    thresholds = y_train.quantile(
+        [0.50, 0.75, 0.90]
+    ).to_dict()
+
+    print("\nRISK THRESHOLDS:", thresholds)
+
+    # Feature importance
+    forest = model.named_steps["regressor"]
+
+    feature_names = (
+        model.named_steps["preprocessor"]
+        .get_feature_names_out()
+    )
+
+    importance = pd.Series(
+        forest.feature_importances_,
+        index=feature_names
+    ).sort_values(ascending=False)
