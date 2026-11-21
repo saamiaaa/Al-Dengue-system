@@ -22,3 +22,16 @@ for horizon in [2, 3, 4]:
         models[horizon] = joblib.load(model_path)
     else:
         print(f"WARNING: Missing model {model_path}")
+
+
+# home endpoint
+
+@app.get("/")
+def home():
+
+    return {
+        "message": "AI Dengue Prediction API is running!",
+        "available_models": list(models.keys())
+    }
+
+
