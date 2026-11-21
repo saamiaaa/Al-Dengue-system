@@ -46,3 +46,13 @@ for window in [2, 3, 4]:
 df["temp_lag_1"] = (
     df.groupby("ward_id")["avg_temp_c"].shift(1)
 )
+
+df["humidity_lag_1"] = (
+    df.groupby("ward_id")["relative_humidity_pct"].shift(1)
+)
+
+# Previous dengue cases
+for lag in range(1, 5):
+    df[f"dengue_cases_lag_{lag}"] = (
+        df.groupby("ward_id")["dengue_cases"].shift(lag)
+    )
