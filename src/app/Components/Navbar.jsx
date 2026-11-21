@@ -6,6 +6,7 @@ import Header from "./Header";
 import Overview from "./Overview";
 import Analytics from "./Analytics";
 import RiskMap from "./RiskMap";
+import WardMonitoring from "./WardMonitoring";
 
 const Navbar = () => {
   const [activeTab, setActiveTab] = useState("Home");
@@ -20,7 +21,7 @@ const Navbar = () => {
             🦟 Real-Time Surveillance & AI Forecasting
           </span>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 leading-tight">
-            AI-Powered Dengue Outbreak & Hospital Monitoring System
+            AI-Powered Dengue Outbreak & Ward Surveillance System
           </h1>
           <p className="text-gray-600 mt-4 text-sm sm:text-base leading-relaxed">
             Monitor real-time dengue cases in <strong>{selectedCity}</strong>, analyze weather lag trends, and inspect ward-level vector risks.
@@ -60,6 +61,14 @@ const Navbar = () => {
       return <RiskMap selectedCity={selectedCity} />;
     }
 
+    if (
+      activeTab === "Ward Monitoring" ||
+      activeTab === "Hospital Data" ||
+      activeTab === "Hospitals"
+    ) {
+      return <WardMonitoring selectedCity={selectedCity} />;
+    }
+
     return (
       <div className="p-6 bg-white/90 rounded-xl border border-gray-200 text-gray-600">
         Selected Tab: <strong>{activeTab}</strong> (Coming soon...)
@@ -71,7 +80,7 @@ const Navbar = () => {
     <div
       className="min-h-screen flex text-gray-900 relative overflow-x-hidden bg-cover bg-center bg-fixed"
       style={{
-        backgroundImage: `linear-gradient(to bottom, rgba(248, 250, 252, 0.78), rgba(241, 245, 249, 0.88)), url('public/dengue.jpg')`,
+        backgroundImage: `linear-gradient(to bottom, rgba(248, 250, 252, 0.78), rgba(241, 245, 249, 0.88)), url('/dengue.jpg')`,
       }}
     >
       <Sidebar
