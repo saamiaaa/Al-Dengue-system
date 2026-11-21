@@ -113,3 +113,69 @@ function loadDataset() {
 app.listen(PORT, () => {
     console.log(`Backend running at http://localhost:${PORT}`);
 });
+
+
+
+// =========================================================
+// 2. FEATURE BUILDER (Matches api.py & test_request.json)
+// =========================================================
+function buildWardFeatures(wardId, targetDate, override = {}) {
+    const rows = wardRecords.get(wardId);
+    if (!rows || rows.length < 5) return null;
+
+    let idx = targetDate
+    ? rows.findIndex((r) => r.date === targetDate)
+    : rows.length - 1;
+
+if (idx === -1) return null;
+
+    const cur = rows[idx];
+    const l1 = rows[idx - 1];
+    const l2 = rows[idx - 2];
+    const l3 = rows[idx - 3];
+    const l4 = rows[idx - 4];
+
+    const avg_temp_c =
+        override.avg_temp_c !== undefined ? Number(override.avg_temp_c) : cur.avg_temp_c;
+    const tempDelta = avg_temp_c - cur.avg_temp_c;
+
+    const rainfall_mm =
+        override.rainfall_mm !== undefined ? Number(override.rainfall_mm) : cur.rainfall_mm;
+    const relative_humidity_pct =
+        override.relative_humidity_pct !== undefined
+            ? Number(override.relative_humidity_pct)
+            : cur.relative_humidity_pct;
+
+    // Exact 23 features expected by api.py POST /predict/{horizon}
+    const features = {
+        population_density_sqkm: cur.population_density_sqkm,
+        water_logging_risk_index: cur.water_logging_risk_index,
+        sanitation_score: cur.sanitation_score,
+        avg_temp_c: Number(avg_temp_c.toFixed(2)),
+        max_temp_c: Number((cur.max_temp_c + tempDelta).toFixed(2)),
+        min_temp_c: Number((cur.min_temp_c + tempDelta).toFixed(2)),
+        relative_humidity_pct: Number(relative_humidity_pct.toFixed(2)),
+        rainfall_mm: Number(rainfall_mm.toFixed(2)),
+        rainfall_lag_1: l1.rainfall_mm,
+        rainfall_lag_2: l2.rainfall_mm,
+        rainfall_lag_3: l3.rainfall_mm,
+        rainfall_lag_4: l4.rainfall_mm,
+        rainfall_prev_2w_sum: Number((l1.rainfall_mm + l2.rainfall_mm).toFixed(2)),
+        rainfall_prev_3w_sum: Number(
+            (l1.rainfall_mm + l2.rainfall_mm + l3.rainfall_mm).toFixed(2)
+        ),
+        rainfall_prev_4w_sum: Number(
+            (l1.rainfall_mm + l2.rainfall_mm + l3.rainfall_mm + l4.rainfall_mm).toFixed(2)
+        ),
+        temp_lag_1: l1.avg_temp_c,
+        humidity_lag_1: l1.relative_humidity_pct,
+        dengue_cases_lag_1: l1.dengue_cases,
+        dengue_cases_lag_2: l2.dengue_cases,
+        dengue_cases_lag_3: l3.dengue_cases,
+        dengue_cases_lag_4: l4.dengue_cases,
+        city: cur.city,
+        ward_id: cur.ward_id,
+    };
+
+    return { date: cur.date, current_cases: cur.dengue_cases, features };
+}
