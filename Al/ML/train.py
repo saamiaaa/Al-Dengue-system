@@ -145,3 +145,15 @@ for horizon in [2, 3, 4]:
         data["date"] >= split_date
     ]
 
+    X_train = train_data[feature_columns]
+    y_train = train_data[target_column]
+
+    X_test = test_data[feature_columns]
+    y_test = test_data[target_column]
+
+    print("Training records:", len(train_data))
+    print("Testing records:", len(test_data))
+
+    if len(train_data) == 0 or len(test_data) == 0:
+        print("Not enough data. Skipping horizon.")
+        continue
