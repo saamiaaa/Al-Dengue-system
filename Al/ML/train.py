@@ -178,3 +178,10 @@ for horizon in [2, 3, 4]:
             n_jobs=-1
         ))
     ])
+
+    baseline = DummyRegressor(strategy="mean")
+    baseline.fit(X_train[numeric_features], y_train)
+
+    baseline_predictions = baseline.predict(
+        X_test[numeric_features]
+    )
