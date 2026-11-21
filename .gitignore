@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.venv/
+__pycache__/
+.DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# ML temporary files
+*.pkl
+
+# Trained ML models
+Al/ML/models/*.joblib
