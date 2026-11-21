@@ -110,15 +110,9 @@ function loadDataset() {
     );
 }
 
-app.listen(PORT, () => {
-    console.log(`Backend running at http://localhost:${PORT}`);
-});
 
 
-
-// =========================================================
 // 2. FEATURE BUILDER (Matches api.py & test_request.json)
-// =========================================================
 function buildWardFeatures(wardId, targetDate, override = {}) {
     const rows = wardRecords.get(wardId);
     if (!rows || rows.length < 5) return null;
@@ -475,4 +469,81 @@ app.post("/api/predict-window", async (req, res) => {
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
+});
+
+
+
+
+
+// Weekly weather & dengue history for ward charts
+app.get("/api/history/:wardId", (req, res) => {
+    const { wardId } = req.params;
+    const weeks = Math.min(52, Math.max(4, Number(req.query.weeks) || 12));
+    const date = req.query.date;
+
+    const rows = wardRecords.get(wardId);
+    if (!rows) {
+        return res.status(404).json({ success: false, message: "Ward not found" });
+    }
+
+    let endIdx = date ? rows.findIndex((r) => r.date === date) : rows.length - 1;
+    if (endIdx === -1) endIdx = rows.length - 1;
+
+    res.json({
+        success: true,
+        ward_id: wardId,
+        history: rows.slice(Math.max(0, endIdx - weeks + 1), endIdx + 1),
+    });
+});
+
+// Bonus: Ward-level risk heatmap across all wards (filterable by city & date)
+app.get("/api/heatmap", async (req, res) => {
+    try {
+        const horizon = [2, 3, 4].includes(Number(req.query.horizon))
+            ? Number(req.query.horizon)
+            : 3;
+        const date = req.query.date;
+        const cityFilter = req.query.city;
+
+        const targetWards = [];
+        for (const [city, wards] of cityWards.entries()) {
+            if (!cityFilter || cityFilter === "All" || city === cityFilter) {
+                targetWards.push(...wards);
+            }
+        }
+
+        const wards = await Promise.all(
+            targetWards.map(async (w) => {
+                const built = buildWardFeatures(w.ward_id, date);
+                const pred = await fetchMlByFeatures(horizon, built.features);
+                return {
+                    ward_id: w.ward_id,
+                    city: w.city,
+                    date: built.date,
+                    predicted_dengue_cases: pred.predicted_dengue_cases,
+                    risk_level: pred.risk_level,
+                    water_logging_risk_index: w.water_logging_risk_index,
+                    rainfall_prev_4w_sum: built.features.rainfall_prev_4w_sum,
+                    cached: pred.cached,
+                };
+            })
+        );
+
+        res.json({
+            success: true,
+            horizon,
+            count: wards.length,
+            wards,
+            cache_stats: cacheStats,
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// 5. START SERVER
+loadDataset();
+
+app.listen(PORT, () => {
+    console.log(`Backend running at http://localhost:${PORT}`);
 });
