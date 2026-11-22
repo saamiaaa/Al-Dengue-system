@@ -7,6 +7,7 @@ import RiskMap from "./RiskMap";
 import Analytics from "./Analytics";
 import WardMonitoring from "./WardMonitoring";
 import { Alerts, Reports, Settings, HelpAbout } from "./OtherTabs";
+import Predictions from "./Predictions";
 
 const Navbar = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -62,12 +63,8 @@ const Navbar = () => {
         return <HelpAbout />;
       default:
         return (
-          <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm text-center space-y-2">
-            <h2 className="text-xl font-bold text-gray-800">{activeTab}</h2>
-            <p className="text-sm text-gray-500">
-              AI ML Inference module ready for backend endpoint integration.
-            </p>
-          </div>
+         <Predictions selectedCity={selectedCity} />
+          
         );
     }
   };
