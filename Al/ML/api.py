@@ -4,6 +4,9 @@ from typing import Optional
 import pandas as pd
 import joblib
 
+from pydantic import BaseModel
+import numpy as np
+
 app = FastAPI(
     title="AI Dengue Prediction API",
     description="Predict dengue cases 2, 3 and 4 weeks ahead.",
@@ -324,4 +327,121 @@ def get_capacity():
         "success": True,
         "rule": "Assumed bed capacity per ward = round((population_density_sqkm / 25,000) + (sanitation_score * 3)), minimum 1 bed (documented operational assumption; dataset has no bed capacity column)",
         "capacity": bed_capacity
+    }
+
+
+SALINE_PER_CASE = 2.38
+BEDS_PER_CASE = 0.29
+
+
+class SimulateRequest(BaseModel):
+    date: Optional[str] = None
+    deployed_crews: dict[str, int] = {}
+
+
+@app.post("/simulate")
+def simulate_vector_control(req: SimulateRequest):
+    if not all(h in models for h in [2, 3, 4]):
+        raise HTTPException(status_code=503, detail="All 2, 3, and 4-week models must be loaded.")
+
+    target_date = req.date or available_dates[-1]
+    if target_date not in available_dates:
+        raise HTTPException(status_code=404, detail=f"Date {target_date} is not available.")
+
+    feature_columns = models[2]["features"]
+    base_df = (
+        df[df["date"] == pd.Timestamp(target_date)]
+        .dropna(subset=feature_columns)
+        .sort_values(["city", "ward_id"])
+        .reset_index(drop=True)
+    )
+    if base_df.empty:
+        raise HTTPException(status_code=404, detail="No ward data for this date.")
+
+    base_preds = {
+        h: np.maximum(models[h]["model"].predict(base_df[feature_columns]), 0)
+        for h in [2, 3, 4]
+    }
+
+    preview_mode = len(req.deployed_crews) == 0
+    sim_df = base_df.copy()
+    crews_used = []
+
+    for idx, row in sim_df.iterrows():
+        wid = row["ward_id"]
+        c = 2 if preview_mode else max(0, int(req.deployed_crews.get(wid, 0)))
+        crews_used.append(c)
+        if c > 0:
+            effect = 1.0 - math.exp(-0.30 * c)
+            sim_df.at[idx, "water_logging_risk_index"] = max(
+                0.05, float(row["water_logging_risk_index"]) * (1.0 - 0.65 * effect)
+            )
+            sim_df.at[idx, "sanitation_score"] = min(
+                1.0, float(row["sanitation_score"]) + (1.0 - float(row["sanitation_score"])) * 0.45 * effect
+            )
+            sim_df.at[idx, "dengue_cases_lag_1"] = float(row["dengue_cases_lag_1"]) * (1.0 - 0.25 * effect)
+
+    sim_2w = np.maximum(models[2]["model"].predict(sim_df[feature_columns]), 0)
+
+    sim_df_next = sim_df.copy()
+    for idx in range(len(sim_df_next)):
+        if crews_used[idx] > 0:
+            ratio_2w = (sim_2w[idx] / base_preds[2][idx]) if base_preds[2][idx] > 0 else 1.0
+            sim_df_next.at[idx, "dengue_cases_lag_1"] = float(sim_df.at[idx, "dengue_cases_lag_1"]) * ratio_2w
+            sim_df_next.at[idx, "dengue_cases_lag_2"] = float(sim_df.at[idx, "dengue_cases_lag_2"]) * (0.5 + 0.5 * ratio_2w)
+
+    sim_3w = np.maximum(models[3]["model"].predict(sim_df_next[feature_columns]), 0)
+    sim_4w = np.maximum(models[4]["model"].predict(sim_df_next[feature_columns]), 0)
+    sim_preds = {2: sim_2w, 3: sim_3w, 4: sim_4w}
+
+    wards_out = []
+    for idx, row in base_df.iterrows():
+        c = crews_used[idx]
+        b2, b3, b4 = float(base_preds[2][idx]), float(base_preds[3][idx]), float(base_preds[4][idx])
+        s2, s3, s4 = float(sim_preds[2][idx]), float(sim_preds[3][idx]), float(sim_preds[4][idx])
+
+        base_total = b2 + b3 + b4
+        sim_total = s2 + s3 + s4
+        prevented = max(0.0, base_total - sim_total)
+
+        base_beds = sum(round(v * BEDS_PER_CASE) for v in (b2, b3, b4))
+        sim_beds = sum(round(v * BEDS_PER_CASE) for v in (s2, s3, s4))
+
+        base_saline = sum(round(v * SALINE_PER_CASE) for v in (b2, b3, b4))
+        sim_saline = sum(round(v * SALINE_PER_CASE) for v in (s2, s3, s4))
+
+        wards_out.append({
+            "ward_id": row["ward_id"],
+            "city": row["city"],
+            "population_density_sqkm": int(row["population_density_sqkm"]),
+            "crews_deployed": c,
+            "baseline_cases": {"2w": round(b2, 2), "3w": round(b3, 2), "4w": round(b4, 2), "total": round(base_total, 2)},
+            "simulated_cases": {"2w": round(s2, 2), "3w": round(s3, 2), "4w": round(s4, 2), "total": round(sim_total, 2)},
+            "cases_prevented": round(prevented, 2),
+            "beds_saved": max(0, base_beds - sim_beds),
+            "saline_saved": max(0, base_saline - sim_saline),
+            "roi_cases_per_crew": round(prevented / c, 2) if c > 0 else 0.0
+        })
+
+    wards_out.sort(key=lambda w: (w["roi_cases_per_crew"], w["cases_prevented"]), reverse=True)
+    for rank, w in enumerate(wards_out, start=1):
+        w["roi_rank"] = rank
+
+    active = wards_out if preview_mode else [w for w in wards_out if w["crews_deployed"] > 0]
+
+    return {
+        "success": True,
+        "preview_mode": preview_mode,
+        "data_date": target_date,
+        "assumptions": {
+            "intervention_model": "Diminishing-returns vector control curve (effect = 1 - exp(-0.30 * crews)) lowers water_logging_risk_index (up to -65%), improves sanitation_score (up to +45% of gap), and reduces dengue_cases_lag_1 (up to -25%), then propagates 2W case reductions into 3W and 4W RF model lags.",
+            "preview_rule": "When deployed_crews is empty, simulates 2 crews per ward across all 60 wards to rank baseline intervention ROI."
+        },
+        "summary": {
+            "total_crews_deployed": sum(w["crews_deployed"] for w in active),
+            "total_cases_prevented": round(sum(w["cases_prevented"] for w in active), 2),
+            "total_beds_saved": sum(w["beds_saved"] for w in active),
+            "total_saline_saved": sum(w["saline_saved"] for w in active)
+        },
+        "wards": wards_out
     }
