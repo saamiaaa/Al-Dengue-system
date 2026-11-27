@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Navbar from "./Components/Navbar";
 import SidebarControls from "./Components/SidebarControls";
 import {
   AlertTriangle,
   BedDouble,
   Droplets,
-  TestTube2,
   SprayCan,
   ArrowRightLeft,
   TrendingDown,
@@ -17,7 +17,6 @@ import {
   X,
 } from "lucide-react";
 
-// Offline Deterministic Baseline Data (Representative high-risk wards across all 5 cities)
 const BASELINE_WARDS = [
   { ward_id: "DNCC_Ward_01", city: "Dhaka North", pop_density: 68500, water_logging: 0.89, predicted_cases: 145, bed_capacity: 95 },
   { ward_id: "DNCC_Ward_05", city: "Dhaka North", pop_density: 61200, water_logging: 0.82, predicted_cases: 112, bed_capacity: 85 },
@@ -35,24 +34,19 @@ const BASELINE_WARDS = [
 ];
 
 export default function Home() {
-  // Global Sidebar States
   const [selectedCity, setSelectedCity] = useState("ALL");
   const [selectedWard, setSelectedWard] = useState("ALL");
   const [stockPercentage, setStockPercentage] = useState(100);
   const [totalCrews, setTotalCrews] = useState(60);
-  const [isOfflineMode, setIsOfflineMode] = useState(true); // Deterministic local engine active
+  const [isOfflineMode, setIsOfflineMode] = useState(true);
+  const [activeTab, setActiveTab] = useState("allocation");
 
-  // Active Tab State
-  const [activeTab, setActiveTab] = useState("allocation"); // 'allocation' | 'overflow' | 'simulator'
-
-  // Vector Control Simulator State: { [ward_id]: deployed_crews }
   const [deployedCrews, setDeployedCrews] = useState({
     DSCC_Ward_02: 4,
     DNCC_Ward_01: 3,
     CCC_Ward_01: 3,
   });
 
-  // Dispatch Modal State
   const [dispatchWard, setDispatchWard] = useState(null);
   const [copiedText, setCopiedText] = useState(false);
 
@@ -63,9 +57,8 @@ export default function Home() {
     setTotalCrews(60);
   };
 
-  // 1. Constrained Resource Allocation Engine (Prioritizes High-Risk + High-Density Wards)
+  // Pure functional reduction (fixes ESLint mutation warnings)
   const allocatedData = useMemo(() => {
-    // Calculate raw requirements per ward (derived from dataset ratios: ~2.4 saline, ~1.15 kits, ~0.35 beds per case)
     const enriched = BASELINE_WARDS.map((w) => {
       const reqSaline = Math.round(w.predicted_cases * 2.4);
       const reqKits = Math.round(w.predicted_cases * 1.15);
@@ -74,29 +67,23 @@ export default function Home() {
       return { ...w, reqSaline, reqKits, reqBeds, priorityScore };
     });
 
-    // Sort descending by priorityScore so high-risk, dense wards get stock first under scarcity
     const sorted = [...enriched].sort((a, b) => b.priorityScore - a.priorityScore);
-
     const totalReqSaline = sorted.reduce((acc, w) => acc + w.reqSaline, 0);
     const totalReqKits = sorted.reduce((acc, w) => acc + w.reqKits, 0);
-
-    let remSaline = Math.round(totalReqSaline * (stockPercentage / 100));
-    let remKits = Math.round(totalReqKits * (stockPercentage / 100));
-    let remCrews = totalCrews;
-
     const totalPriority = sorted.reduce((acc, w) => acc + w.priorityScore, 0);
 
-    return sorted.map((w) => {
-      // Priority-weighted allocation under scarcity
-      const allocSaline = Math.min(w.reqSaline, remSaline);
-      remSaline -= allocSaline;
+    const initialPool = {
+      saline: Math.round(totalReqSaline * (stockPercentage / 100)),
+      kits: Math.round(totalReqKits * (stockPercentage / 100)),
+      crews: totalCrews,
+      items: [],
+    };
 
-      const allocKits = Math.min(w.reqKits, remKits);
-      remKits -= allocKits;
-
+    return sorted.reduce((acc, w) => {
+      const allocSaline = Math.min(w.reqSaline, acc.saline);
+      const allocKits = Math.min(w.reqKits, acc.kits);
       const idealCrews = Math.max(1, Math.round((w.priorityScore / totalPriority) * totalCrews));
-      const allocCrews = Math.min(idealCrews, remCrews);
-      remCrews -= allocCrews;
+      const allocCrews = Math.min(idealCrews, acc.crews);
 
       const salineDeficit = w.reqSaline - allocSaline;
       const kitDeficit = w.reqKits - allocKits;
@@ -112,19 +99,26 @@ export default function Home() {
           : "Low";
 
       return {
-        ...w,
-        allocSaline,
-        allocKits,
-        allocCrews,
-        salineDeficit,
-        kitDeficit,
-        hasDeficit,
-        riskTier,
+        saline: acc.saline - allocSaline,
+        kits: acc.kits - allocKits,
+        crews: acc.crews - allocCrews,
+        items: [
+          ...acc.items,
+          {
+            ...w,
+            allocSaline,
+            allocKits,
+            allocCrews,
+            salineDeficit,
+            kitDeficit,
+            hasDeficit,
+            riskTier,
+          },
+        ],
       };
-    });
+    }, initialPool).items;
   }, [stockPercentage, totalCrews]);
 
-  // Filtered wards for display
   const visibleWards = useMemo(() => {
     return allocatedData.filter((w) => {
       if (selectedCity !== "ALL" && w.city !== selectedCity) return false;
@@ -133,7 +127,6 @@ export default function Home() {
     });
   }, [allocatedData, selectedCity, selectedWard]);
 
-  // 2. Intra-City Hospital Surge & Cross-Ward Overflow Routing
   const overflowRouting = useMemo(() => {
     const cities = [...new Set(BASELINE_WARDS.map((w) => w.city))];
     const routes = [];
@@ -194,12 +187,10 @@ export default function Home() {
     return { routes, citySummary };
   }, [allocatedData, selectedCity]);
 
-  // 3. "What-If" Vector Control Impact Simulator (2-to-4-week downstream ML projection)
   const simulationResults = useMemo(() => {
     return visibleWards
       .map((w) => {
         const crewsAssigned = deployedCrews[w.ward_id] || 0;
-        // Diminishing returns curve driven by water_logging_risk & pop_density
         const effectiveness = 0.14 * (0.6 + w.water_logging * 0.5);
         const reductionFactor = 1 - Math.exp(-effectiveness * crewsAssigned);
         const casesPrevented = Math.round(w.predicted_cases * reductionFactor * 0.65);
@@ -229,7 +220,6 @@ export default function Home() {
     });
   };
 
-  // 4. Generate SMS / WhatsApp Dispatch Text
   const getDispatchText = (w) => {
     return `[DENGUE COMMAND ALERT - ${w.city.toUpperCase()}]
 Ward: ${w.ward_id} | Risk: ${w.riskTier.toUpperCase()}
@@ -248,425 +238,412 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
     setTimeout(() => setCopiedText(false), 2000);
   };
 
-  // Summary KPIs
   const totalCases = visibleWards.reduce((s, w) => s + w.predicted_cases, 0);
   const totalSalineAlloc = visibleWards.reduce((s, w) => s + w.allocSaline, 0);
   const totalSalineReq = visibleWards.reduce((s, w) => s + w.reqSaline, 0);
   const deficitWardCount = visibleWards.filter((w) => w.hasDeficit).length;
 
   return (
-    <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50 text-slate-900 font-sans">
-      {/* Left Sidebar Controls */}
-      <SidebarControls
-        selectedCity={selectedCity}
-        setSelectedCity={setSelectedCity}
-        selectedWard={selectedWard}
-        setSelectedWard={setSelectedWard}
-        stockPercentage={stockPercentage}
-        setStockPercentage={setStockPercentage}
-        totalCrews={totalCrews}
-        setTotalCrews={setTotalCrews}
-        isOfflineMode={isOfflineMode}
-        onResetDefaults={handleResetDefaults}
-      />
+    <Navbar>
+      <div className="flex flex-col lg:flex-row rounded-2xl overflow-hidden border border-slate-200 bg-slate-50 shadow-sm text-slate-900">
+        <SidebarControls
+          selectedCity={selectedCity}
+          setSelectedCity={setSelectedCity}
+          selectedWard={selectedWard}
+          setSelectedWard={setSelectedWard}
+          stockPercentage={stockPercentage}
+          setStockPercentage={setStockPercentage}
+          totalCrews={totalCrews}
+          setTotalCrews={setTotalCrews}
+          isOfflineMode={isOfflineMode}
+          onResetDefaults={handleResetDefaults}
+        />
 
-      {/* Main Operational Dashboard */}
-      <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
-        {/* Top Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">
-              Urban Dengue Outbreak & Resource Dispatch System
-            </h1>
-            <p className="text-sm text-slate-500">
-              2-to-4-Week Forecast, Scarcity Optimization & Intra-City Surge Routing
-            </p>
-          </div>
-          <button
-            onClick={() => setIsOfflineMode(!isOfflineMode)}
-            className="self-start px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700"
-          >
-            Toggle Engine Mode ({isOfflineMode ? "Offline Safe" : "Live API"})
-          </button>
-        </div>
-
-        {/* Top KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-medium text-slate-500 uppercase">Projected Cases (2-4 Wks)</p>
-            <p className="text-2xl font-bold text-slate-900 mt-1">{totalCases.toLocaleString()}</p>
-            <p className="text-xs text-rose-600 mt-1">Across {visibleWards.length} active wards</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-medium text-slate-500 uppercase">Saline Allocation</p>
-              <Droplets className="w-4 h-4 text-blue-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 mt-1">
-              {totalSalineAlloc.toLocaleString()}{" "}
-              <span className="text-sm font-normal text-slate-400">/ {totalSalineReq.toLocaleString()}</span>
-            </p>
-            <p className="text-xs text-slate-500 mt-1">Stock level at {stockPercentage}%</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-medium text-slate-500 uppercase">Critical Deficit Wards</p>
-              <AlertTriangle className="w-4 h-4 text-red-500" />
-            </div>
-            <p className="text-2xl font-bold text-red-600 mt-1">{deficitWardCount}</p>
-            <p className="text-xs text-slate-500 mt-1">Cannot meet 100% supply demand</p>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div className="flex justify-between items-start">
-              <p className="text-xs font-medium text-slate-500 uppercase">Overflow Transfers</p>
-              <ArrowRightLeft className="w-4 h-4 text-amber-500" />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 mt-1">
-              {overflowRouting.routes.reduce((s, r) => s + r.patientsRouted, 0)} Patients
-            </p>
-            <p className="text-xs text-slate-500 mt-1">Intra-city bed balancing</p>
-          </div>
-        </div>
-
-        {/* Module Navigation Tabs */}
-        <div className="flex gap-2 border-b border-slate-200 mb-6">
-          <button
-            onClick={() => setActiveTab("allocation")}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === "allocation"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            1. Constrained Resource Allocation
-          </button>
-          <button
-            onClick={() => setActiveTab("overflow")}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === "overflow"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            2. Hospital Surge & Overflow Routing
-          </button>
-          <button
-            onClick={() => setActiveTab("simulator")}
-            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === "simulator"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            3. &ldquo;What-If&rdquo; Vector Control Simulator
-          </button>
-        </div>
-
-        {/* TAB 1: CONSTRAINED RESOURCE ALLOCATION & DISPATCH */}
-        {activeTab === "allocation" && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-              <h2 className="font-bold text-slate-800">
-                Priority-Ranked Ward Supply & Crew Allocation
+        <div className="flex-1 p-6 lg:p-8 overflow-y-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">
+                Urban Dengue Outbreak &amp; Resource Dispatch System
               </h2>
-              <span className="text-xs text-slate-500">
-                Sorted by Risk × Population Density × Water-Logging Index
-              </span>
+              <p className="text-xs text-slate-500">
+                2-to-4-Week Forecast, Scarcity Optimization &amp; Intra-City Surge Routing
+              </p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">Ward & Density</th>
-                    <th className="py-3 px-4">Risk & Cases</th>
-                    <th className="py-3 px-4">Saline (Alloc/Req)</th>
-                    <th className="py-3 px-4">Test Kits (Alloc/Req)</th>
-                    <th className="py-3 px-4">Beds (Req/Cap)</th>
-                    <th className="py-3 px-4">Crews</th>
-                    <th className="py-3 px-4">Status / Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {visibleWards.map((w) => (
-                    <tr key={w.ward_id} className="hover:bg-slate-50/80">
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900">{w.ward_id}</div>
-                        <div className="text-xs text-slate-500">
-                          {w.city} • {w.pop_density.toLocaleString()}/km²
+            <button
+              onClick={() => setIsOfflineMode(!isOfflineMode)}
+              className="self-start px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer"
+            >
+              Toggle Engine Mode ({isOfflineMode ? "Offline Safe" : "Live API"})
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase">Projected Cases (2-4 Wks)</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalCases.toLocaleString()}</p>
+              <p className="text-xs text-rose-600 mt-1">Across {visibleWards.length} active wards</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex justify-between items-start">
+                <p className="text-xs font-medium text-slate-500 uppercase">Saline Allocation</p>
+                <Droplets className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-2xl font-bold text-slate-900 mt-1">
+                {totalSalineAlloc.toLocaleString()}{" "}
+                <span className="text-sm font-normal text-slate-400">/ {totalSalineReq.toLocaleString()}</span>
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Stock level at {stockPercentage}%</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex justify-between items-start">
+                <p className="text-xs font-medium text-slate-500 uppercase">Critical Deficit Wards</p>
+                <AlertTriangle className="w-4 h-4 text-red-500" />
+              </div>
+              <p className="text-2xl font-bold text-red-600 mt-1">{deficitWardCount}</p>
+              <p className="text-xs text-slate-500 mt-1">Cannot meet 100% supply demand</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex justify-between items-start">
+                <p className="text-xs font-medium text-slate-500 uppercase">Overflow Transfers</p>
+                <ArrowRightLeft className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-2xl font-bold text-slate-900 mt-1">
+                {overflowRouting.routes.reduce((s, r) => s + r.patientsRouted, 0)} Patients
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Intra-city bed balancing</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 border-b border-slate-200 mb-6">
+            <button
+              onClick={() => setActiveTab("allocation")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "allocation"
+                  ? "border-rose-600 text-rose-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              1. Constrained Resource Allocation
+            </button>
+            <button
+              onClick={() => setActiveTab("overflow")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "overflow"
+                  ? "border-rose-600 text-rose-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              2. Hospital Surge &amp; Overflow Routing
+            </button>
+            <button
+              onClick={() => setActiveTab("simulator")}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "simulator"
+                  ? "border-rose-600 text-rose-600"
+                  : "border-transparent text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              3. &ldquo;What-If&rdquo; Vector Control Simulator
+            </button>
+          </div>
+
+          {activeTab === "allocation" && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 className="font-bold text-slate-800">
+                  Priority-Ranked Ward Supply &amp; Crew Allocation
+                </h3>
+                <span className="text-xs text-slate-500">
+                  Sorted by Risk × Population Density × Water-Logging Index
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">Ward &amp; Density</th>
+                      <th className="py-3 px-4">Risk &amp; Cases</th>
+                      <th className="py-3 px-4">Saline (Alloc/Req)</th>
+                      <th className="py-3 px-4">Test Kits (Alloc/Req)</th>
+                      <th className="py-3 px-4">Beds (Req/Cap)</th>
+                      <th className="py-3 px-4">Crews</th>
+                      <th className="py-3 px-4">Status / Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {visibleWards.map((w) => (
+                      <tr key={w.ward_id} className="hover:bg-slate-50/80">
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-slate-900">{w.ward_id}</div>
+                          <div className="text-xs text-slate-500">
+                            {w.city} • {w.pop_density.toLocaleString()}/km²
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-block px-2 py-0.5 text-xs font-bold rounded ${
+                              w.riskTier === "Critical"
+                                ? "bg-red-100 text-red-700"
+                                : w.riskTier === "High"
+                                ? "bg-orange-100 text-orange-700"
+                                : w.riskTier === "Medium"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {w.riskTier} ({w.predicted_cases})
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs">
+                          <span className={w.salineDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
+                            {w.allocSaline}
+                          </span>{" "}
+                          / {w.reqSaline}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs">
+                          <span className={w.kitDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
+                            {w.allocKits}
+                          </span>{" "}
+                          / {w.reqKits}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs">
+                          <span className={w.reqBeds > w.bed_capacity ? "text-amber-600 font-bold" : "text-slate-800"}>
+                            {w.reqBeds}
+                          </span>{" "}
+                          / {w.bed_capacity}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 px-2 py-1 rounded">
+                            <SprayCan className="w-3 h-3 text-rose-600" /> {w.allocCrews}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            {w.hasDeficit ? (
+                              <span className="px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded">
+                                DEFICIT
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700 rounded">
+                                FULFILLED
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setDispatchWard(w)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 rounded-md cursor-pointer"
+                            >
+                              <Send className="w-3 h-3" /> Dispatch
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "overflow" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {overflowRouting.citySummary.map((c) => (
+                  <div key={c.city} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="font-bold text-slate-800">{c.city}</h3>
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded ${
+                          c.utilizationPct > 100
+                            ? "bg-red-100 text-red-700"
+                            : c.utilizationPct > 85
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {c.utilizationPct}% Utilized
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2">
+                      <div
+                        className={`h-full ${c.utilizationPct > 100 ? "bg-red-600" : "bg-rose-500"}`}
+                        style={{ width: `${Math.min(100, c.utilizationPct)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500">
+                      <span>Demand: {c.totalDemand} beds</span>
+                      <span>Headroom: {c.headroom} free</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <BedDouble className="w-5 h-5 text-rose-600" />
+                  Automated Intra-City Overflow Patient Transfers
+                </h3>
+                {overflowRouting.routes.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No cross-ward hospital overflow detected for the selected jurisdiction.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {overflowRouting.routes.map((r, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex flex-wrap items-center justify-between p-3 rounded-lg border text-sm ${
+                          r.unmet
+                            ? "bg-red-50 border-red-200 text-red-900"
+                            : "bg-slate-50 border-slate-200 text-slate-800"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 font-medium">
+                          <span className="text-xs font-bold uppercase px-2 py-0.5 bg-white border rounded">
+                            {r.city}
+                          </span>
+                          <span className="font-bold text-rose-700">{r.fromWard}</span>
+                          <span>➔</span>
+                          <span className="font-bold text-emerald-700">{r.toWard}</span>
                         </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`inline-block px-2 py-0.5 text-xs font-bold rounded ${
-                            w.riskTier === "Critical"
-                              ? "bg-red-100 text-red-700"
-                              : w.riskTier === "High"
-                              ? "bg-orange-100 text-orange-700"
-                              : w.riskTier === "Medium"
-                              ? "bg-amber-100 text-amber-700"
-                              : "bg-emerald-100 text-emerald-700"
-                          }`}
-                        >
-                          {w.riskTier} ({w.predicted_cases})
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                        <span className={w.salineDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
-                          {w.allocSaline}
-                        </span>{" "}
-                        / {w.reqSaline}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                        <span className={w.kitDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
-                          {w.allocKits}
-                        </span>{" "}
-                        / {w.reqKits}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                        <span className={w.reqBeds > w.bed_capacity ? "text-amber-600 font-bold" : "text-slate-800"}>
-                          {w.reqBeds}
-                        </span>{" "}
-                        / {w.bed_capacity}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 px-2 py-1 rounded">
-                          <SprayCan className="w-3 h-3 text-rose-600" /> {w.allocCrews}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          {w.hasDeficit ? (
-                            <span className="px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded">
-                              DEFICIT
+                        <div className="text-xs font-semibold">
+                          {r.patientsRouted} Patients Routed{" "}
+                          {!r.unmet && `(Receiving Ward Spare: ${r.remainingSurplus} beds)`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "simulator" && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-emerald-600" />
+                    2-to-4-Week Larvicide &amp; Fogging Impact Simulator
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Deploy crews to specific wards to simulate downstream case, bed &amp; saline reductions ranked by ROI
+                  </p>
+                </div>
+                <div className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                  Total Cases Prevented: {simulationResults.reduce((s, w) => s + w.casesPrevented, 0)}
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">ROI Rank &amp; Ward</th>
+                      <th className="py-3 px-4">Deploy Crews</th>
+                      <th className="py-3 px-4">Baseline ➔ Post-Control Cases</th>
+                      <th className="py-3 px-4">Beds Saved</th>
+                      <th className="py-3 px-4">Saline Saved</th>
+                      <th className="py-3 px-4">ROI (Cases / Crew)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {simulationResults.map((w, index) => (
+                      <tr key={w.ward_id} className="hover:bg-slate-50">
+                        <td className="py-3 px-4">
+                          <span className="font-bold text-slate-400 mr-2">#{index + 1}</span>
+                          <span className="font-semibold text-slate-900">{w.ward_id}</span>
+                          <span className="block text-xs text-slate-500 ml-6">
+                            Water-Logging Risk: {(w.water_logging * 100).toFixed(0)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                            <button
+                              onClick={() => updateCrewCount(w.ward_id, -1)}
+                              className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
+                            >
+                              -
+                            </button>
+                            <span className="w-6 text-center font-bold text-xs">
+                              {w.crewsAssigned}
                             </span>
-                          ) : (
-                            <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700 rounded">
-                              FULFILLED
+                            <button
+                              onClick={() => updateCrewCount(w.ward_id, 1)}
+                              className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs">
+                          <span className="text-slate-500 line-through mr-1">{w.predicted_cases}</span>
+                          ➔ <span className="font-bold text-emerald-700">{w.postCases}</span>{" "}
+                          {w.casesPrevented > 0 && (
+                            <span className="text-emerald-600 font-semibold">
+                              (-{w.casesPrevented})
                             </span>
                           )}
-                          <button
-                            onClick={() => setDispatchWard(w)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 rounded-md"
-                          >
-                            <Send className="w-3 h-3" /> Dispatch
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: HOSPITAL SURGE & CROSS-WARD OVERFLOW ROUTING */}
-        {activeTab === "overflow" && (
-          <div className="space-y-6">
-            {/* City Bed Utilization Bars */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {overflowRouting.citySummary.map((c) => (
-                <div key={c.city} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-bold text-slate-800">{c.city}</h3>
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded ${
-                        c.utilizationPct > 100
-                          ? "bg-red-100 text-red-700"
-                          : c.utilizationPct > 85
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {c.utilizationPct}% Utilized
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2">
-                    <div
-                      className={`h-full ${
-                        c.utilizationPct > 100 ? "bg-red-600" : "bg-rose-500"
-                      }`}
-                      style={{ width: `${Math.min(100, c.utilizationPct)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-500">
-                    <span>Demand: {c.totalDemand} beds</span>
-                    <span>Headroom: {c.headroom} free</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Automated Intra-City Routing Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-              <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                <BedDouble className="w-5 h-5 text-rose-600" />
-                Automated Intra-City Overflow Patient Transfers
-              </h3>
-              {overflowRouting.routes.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No cross-ward hospital overflow detected for the selected jurisdiction.
-                </p>
-              ) : (
-                <div className="space-y-2.5">
-                  {overflowRouting.routes.map((r, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex flex-wrap items-center justify-between p-3 rounded-lg border text-sm ${
-                        r.unmet
-                          ? "bg-red-50 border-red-200 text-red-900"
-                          : "bg-slate-50 border-slate-200 text-slate-800"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 font-medium">
-                        <span className="text-xs font-bold uppercase px-2 py-0.5 bg-white border rounded">
-                          {r.city}
-                        </span>
-                        <span className="font-bold text-rose-700">{r.fromWard}</span>
-                        <span>➔</span>
-                        <span className="font-bold text-emerald-700">{r.toWard}</span>
-                      </div>
-                      <div className="text-xs font-semibold">
-                        {r.patientsRouted} Patients Routed{" "}
-                        {!r.unmet && `(Receiving Ward Spare: ${r.remainingSurplus} beds)`}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 3: "WHAT-IF" VECTOR CONTROL IMPACT SIMULATOR */}
-        {activeTab === "simulator" && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div>
-                <h2 className="font-bold text-slate-800 flex items-center gap-2">
-                  <TrendingDown className="w-5 h-5 text-emerald-600" />
-                  2-to-4-Week Larvicide & Fogging Impact Simulator
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Deploy crews to specific wards to simulate downstream case, bed & saline reductions ranked by ROI
-                </p>
-              </div>
-              <div className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg">
-                Total Cases Prevented:{" "}
-                {simulationResults.reduce((s, w) => s + w.casesPrevented, 0)}
+                        </td>
+                        <td className="py-3 px-4 text-xs font-semibold text-slate-700">
+                          -{w.bedsSaved} beds
+                        </td>
+                        <td className="py-3 px-4 text-xs font-semibold text-slate-700">
+                          -{w.salineSaved} bags
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800">
+                            {w.roiPerCrew} cases/crew
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4">ROI Rank & Ward</th>
-                    <th className="py-3 px-4">Deploy Crews</th>
-                    <th className="py-3 px-4">Baseline ➔ Post-Control Cases</th>
-                    <th className="py-3 px-4">Beds Saved</th>
-                    <th className="py-3 px-4">Saline Saved</th>
-                    <th className="py-3 px-4">ROI (Cases / Crew)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {simulationResults.map((w, index) => (
-                    <tr key={w.ward_id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-slate-400 mr-2">#{index + 1}</span>
-                        <span className="font-semibold text-slate-900">{w.ward_id}</span>
-                        <span className="block text-xs text-slate-500 ml-6">
-                          Water-Logging Risk: {(w.water_logging * 100).toFixed(0)}%
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                          <button
-                            onClick={() => updateCrewCount(w.ward_id, -1)}
-                            className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50"
-                          >
-                            -
-                          </button>
-                          <span className="w-6 text-center font-bold text-xs">
-                            {w.crewsAssigned}
-                          </span>
-                          <button
-                            onClick={() => updateCrewCount(w.ward_id, 1)}
-                            className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-xs">
-                        <span className="text-slate-500 line-through mr-1">{w.predicted_cases}</span>
-                        ➔ <span className="font-bold text-emerald-700">{w.postCases}</span>{" "}
-                        {w.casesPrevented > 0 && (
-                          <span className="text-emerald-600 font-semibold">
-                            (-{w.casesPrevented})
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                        -{w.bedsSaved} beds
-                      </td>
-                      <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                        -{w.salineSaved} bags
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800">
-                          {w.roiPerCrew} cases/crew
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* 4. ACTIONABLE MULTI-CHANNEL DISPATCH MODAL (SMS/WhatsApp + Printable Brief) */}
-      {dispatchWard && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
-            <div className="flex justify-between items-center border-b pb-3">
-              <h3 className="font-bold text-lg text-slate-900">
-                Commissioner Dispatch Brief — {dispatchWard.ward_id}
-              </h3>
-              <button
-                onClick={() => setDispatchWard(null)}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-500"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <pre className="bg-slate-900 text-emerald-300 p-4 rounded-xl text-xs font-mono whitespace-pre-wrap leading-relaxed">
-              {getDispatchText(dispatchWard)}
-            </pre>
-
-            <div className="flex flex-wrap gap-3 pt-2">
-              <button
-                onClick={() => handleCopySms(getDispatchText(dispatchWard))}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg"
-              >
-                {copiedText ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copiedText ? "Copied for SMS / WhatsApp!" : "Copy SMS / WhatsApp Alert"}
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-lg"
-              >
-                <Printer className="w-4 h-4" /> Print / Save PDF
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {dispatchWard && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
+              <div className="flex justify-between items-center border-b pb-3">
+                <h3 className="font-bold text-lg text-slate-900">
+                  Commissioner Dispatch Brief — {dispatchWard.ward_id}
+                </h3>
+                <button
+                  onClick={() => setDispatchWard(null)}
+                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <pre className="bg-slate-900 text-emerald-300 p-4 rounded-xl text-xs font-mono whitespace-pre-wrap leading-relaxed">
+                {getDispatchText(dispatchWard)}
+              </pre>
+
+              <div className="flex flex-wrap gap-3 pt-2">
+                <button
+                  onClick={() => handleCopySms(getDispatchText(dispatchWard))}
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg cursor-pointer"
+                >
+                  {copiedText ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedText ? "Copied for SMS / WhatsApp!" : "Copy SMS / WhatsApp Alert"}
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold rounded-lg cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" /> Print / Save PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </Navbar>
   );
 }
