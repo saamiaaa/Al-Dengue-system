@@ -3,6 +3,10 @@ from pathlib import Path
 from typing import Optional
 import pandas as pd
 import joblib
+import math
+
+from pydantic import BaseModel
+import numpy as np
 
 app = FastAPI(
     title="AI Dengue Prediction API",
@@ -12,6 +16,7 @@ app = FastAPI(
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
+DATA_DIR = BASE_DIR / "data"
 
 models = {}
 for horizon in [2, 3, 4]:
@@ -20,14 +25,24 @@ for horizon in [2, 3, 4]:
         models[horizon] = joblib.load(model_path)
     else:
         print(f"WARNING: Missing model {model_path}")
-        for package in models.values():
-            package["risk_thresholds"][0.50] = 1.0
 
-# Load dataset and compute per-ward multi-week lags once at startup
-DATA_PATH = BASE_DIR / "data" / "dengue_dataset.xlsx"
-df = pd.read_excel(DATA_PATH)
+for package in models.values():
+    package["risk_thresholds"][0.50] = 1.0
+
+candidate_files = [
+    DATA_DIR / "dengue_dataset_final.xlsx",
+    DATA_DIR / "bangladesh_dengue_large_dataset_onsite.xlsx",
+    DATA_DIR / "dengue_dataset.xlsx",
+]
+DATA_PATH = next((p for p in candidate_files if p.exists()), candidate_files[-1])
+print("Loading dataset from:", DATA_PATH.name)
+
+df = pd.read_excel(DATA_PATH) if DATA_PATH.suffix == ".xlsx" else pd.read_csv(DATA_PATH)
 df["date"] = pd.to_datetime(df["date"])
 df = df.sort_values(["ward_id", "date"]).copy()
+
+if "hospital_beds_required" not in df.columns:
+    df["hospital_beds_required"] = (df["dengue_cases"] * 0.29).round().astype(int)
 
 for i in range(1, 5):
     df[f"rainfall_lag_{i}"] = df.groupby("ward_id")["rainfall_mm"].shift(i)
@@ -44,9 +59,21 @@ df["humidity_lag_1"] = df.groupby("ward_id")["relative_humidity_pct"].shift(1)
 for i in range(1, 5):
     df[f"dengue_cases_lag_{i}"] = df.groupby("ward_id")["dengue_cases"].shift(i)
 
-# Last 52 selectable dates (skips first 4 weeks so lag values are always complete)
 all_dates = sorted(df["date"].dt.strftime("%Y-%m-%d").unique())[4:]
 available_dates = all_dates[-52:]
+
+ward_meta = (
+    df[["ward_id", "population_density_sqkm", "sanitation_score"]]
+    .drop_duplicates("ward_id")
+)
+
+bed_capacity = {
+    row["ward_id"]: max(
+        1,
+        round((float(row["population_density_sqkm"]) / 25000.0) + (float(row["sanitation_score"]) * 3.0))
+    )
+    for _, row in ward_meta.iterrows()
+}
 
 print("Dataset loaded and features prepared!")
 print("Available wards:", df["ward_id"].nunique())
@@ -127,7 +154,7 @@ def get_wards():
     )
     return {
         "total_wards": len(wards),
-        "latest_date": available_dates[-1],
+        "latest_date": available_dates[-1] if available_dates else None,
         "available_dates": available_dates,
         "wards": wards
     }
@@ -156,11 +183,11 @@ def predict_dengue(horizon: int, features: dict):
         input_data = pd.DataFrame([{col: features[col] for col in feature_columns}])
         prediction = max(float(model.predict(input_data)[0]), 0)
 
-        if prediction <= thresholds[0.50]:
+        if prediction < thresholds[0.50]:
             risk = "Low"
-        elif prediction <= thresholds[0.75]:
+        elif prediction < thresholds[0.75]:
             risk = "Medium"
-        elif prediction <= thresholds[0.90]:
+        elif prediction < thresholds[0.90]:
             risk = "High"
         else:
             risk = "Critical"
@@ -209,11 +236,11 @@ def predict_ward(ward_id: str, horizon: int, date: Optional[str] = None):
     input_data = pd.DataFrame([{col: row[col] for col in feature_columns}])
     prediction = max(float(model.predict(input_data)[0]), 0)
 
-    if prediction <= thresholds[0.50]:
+    if prediction < thresholds[0.50]:
         risk = "Low"
-    elif prediction <= thresholds[0.75]:
+    elif prediction < thresholds[0.75]:
         risk = "Medium"
-    elif prediction <= thresholds[0.90]:
+    elif prediction < thresholds[0.90]:
         risk = "High"
     else:
         risk = "Critical"
@@ -267,11 +294,11 @@ def forecast_all(horizon: int, date: Optional[str] = None):
     wards = []
     for (_, row), prediction in zip(rows.iterrows(), predictions):
         value = max(float(prediction), 0)
-        if value <= thresholds[0.50]:
+        if value < thresholds[0.50]:
             risk = "Low"
-        elif value <= thresholds[0.75]:
+        elif value < thresholds[0.75]:
             risk = "Medium"
-        elif value <= thresholds[0.90]:
+        elif value < thresholds[0.90]:
             risk = "High"
         else:
             risk = "Critical"
@@ -292,4 +319,130 @@ def forecast_all(horizon: int, date: Optional[str] = None):
         "total_wards": len(wards),
         "wards": wards,
         "data_warning": "Forecast uses historical dataset values, not live weather data."
+    }
+
+
+@app.get("/capacity")
+def get_capacity():
+    return {
+        "success": True,
+        "rule": "Assumed bed capacity per ward = round((population_density_sqkm / 25,000) + (sanitation_score * 3)), minimum 1 bed (documented operational assumption; dataset has no bed capacity column)",
+        "capacity": bed_capacity
+    }
+
+
+SALINE_PER_CASE = 2.38
+BEDS_PER_CASE = 0.29
+
+
+class SimulateRequest(BaseModel):
+    date: Optional[str] = None
+    deployed_crews: dict[str, int] = {}
+
+
+@app.post("/simulate")
+def simulate_vector_control(req: SimulateRequest):
+    if not all(h in models for h in [2, 3, 4]):
+        raise HTTPException(status_code=503, detail="All 2, 3, and 4-week models must be loaded.")
+
+    target_date = req.date or available_dates[-1]
+    if target_date not in available_dates:
+        raise HTTPException(status_code=404, detail=f"Date {target_date} is not available.")
+
+    feature_columns = models[2]["features"]
+    base_df = (
+        df[df["date"] == pd.Timestamp(target_date)]
+        .dropna(subset=feature_columns)
+        .sort_values(["city", "ward_id"])
+        .reset_index(drop=True)
+    )
+    if base_df.empty:
+        raise HTTPException(status_code=404, detail="No ward data for this date.")
+
+    base_preds = {
+        h: np.maximum(models[h]["model"].predict(base_df[feature_columns]), 0)
+        for h in [2, 3, 4]
+    }
+
+    preview_mode = len(req.deployed_crews) == 0
+    sim_df = base_df.copy()
+    crews_used = []
+
+    for idx, row in sim_df.iterrows():
+        wid = row["ward_id"]
+        c = 2 if preview_mode else max(0, int(req.deployed_crews.get(wid, 0)))
+        crews_used.append(c)
+        if c > 0:
+            effect = 1.0 - math.exp(-0.30 * c)
+            sim_df.at[idx, "water_logging_risk_index"] = max(
+                0.05, float(row["water_logging_risk_index"]) * (1.0 - 0.65 * effect)
+            )
+            sim_df.at[idx, "sanitation_score"] = min(
+                1.0, float(row["sanitation_score"]) + (1.0 - float(row["sanitation_score"])) * 0.45 * effect
+            )
+            sim_df.at[idx, "dengue_cases_lag_1"] = float(row["dengue_cases_lag_1"]) * (1.0 - 0.25 * effect)
+
+    sim_2w = np.maximum(models[2]["model"].predict(sim_df[feature_columns]), 0)
+
+    sim_df_next = sim_df.copy()
+    for idx in range(len(sim_df_next)):
+        if crews_used[idx] > 0:
+            ratio_2w = (sim_2w[idx] / base_preds[2][idx]) if base_preds[2][idx] > 0 else 1.0
+            sim_df_next.at[idx, "dengue_cases_lag_1"] = float(sim_df.at[idx, "dengue_cases_lag_1"]) * ratio_2w
+            sim_df_next.at[idx, "dengue_cases_lag_2"] = float(sim_df.at[idx, "dengue_cases_lag_2"]) * (0.5 + 0.5 * ratio_2w)
+
+    sim_3w = np.maximum(models[3]["model"].predict(sim_df_next[feature_columns]), 0)
+    sim_4w = np.maximum(models[4]["model"].predict(sim_df_next[feature_columns]), 0)
+    sim_preds = {2: sim_2w, 3: sim_3w, 4: sim_4w}
+
+    wards_out = []
+    for idx, row in base_df.iterrows():
+        c = crews_used[idx]
+        b2, b3, b4 = float(base_preds[2][idx]), float(base_preds[3][idx]), float(base_preds[4][idx])
+        s2, s3, s4 = float(sim_preds[2][idx]), float(sim_preds[3][idx]), float(sim_preds[4][idx])
+
+        base_total = b2 + b3 + b4
+        sim_total = s2 + s3 + s4
+        prevented = max(0.0, base_total - sim_total)
+
+        base_beds = sum(round(v * BEDS_PER_CASE) for v in (b2, b3, b4))
+        sim_beds = sum(round(v * BEDS_PER_CASE) for v in (s2, s3, s4))
+
+        base_saline = sum(round(v * SALINE_PER_CASE) for v in (b2, b3, b4))
+        sim_saline = sum(round(v * SALINE_PER_CASE) for v in (s2, s3, s4))
+
+        wards_out.append({
+            "ward_id": row["ward_id"],
+            "city": row["city"],
+            "population_density_sqkm": int(row["population_density_sqkm"]),
+            "crews_deployed": c,
+            "baseline_cases": {"2w": round(b2, 2), "3w": round(b3, 2), "4w": round(b4, 2), "total": round(base_total, 2)},
+            "simulated_cases": {"2w": round(s2, 2), "3w": round(s3, 2), "4w": round(s4, 2), "total": round(sim_total, 2)},
+            "cases_prevented": round(prevented, 2),
+            "beds_saved": max(0, base_beds - sim_beds),
+            "saline_saved": max(0, base_saline - sim_saline),
+            "roi_cases_per_crew": round(prevented / c, 2) if c > 0 else 0.0
+        })
+
+    wards_out.sort(key=lambda w: (w["roi_cases_per_crew"], w["cases_prevented"]), reverse=True)
+    for rank, w in enumerate(wards_out, start=1):
+        w["roi_rank"] = rank
+
+    active = wards_out if preview_mode else [w for w in wards_out if w["crews_deployed"] > 0]
+
+    return {
+        "success": True,
+        "preview_mode": preview_mode,
+        "data_date": target_date,
+        "assumptions": {
+            "intervention_model": "Diminishing-returns vector control curve (effect = 1 - exp(-0.30 * crews)) lowers water_logging_risk_index (up to -65%), improves sanitation_score (up to +45% of gap), and reduces dengue_cases_lag_1 (up to -25%), then propagates 2W case reductions into 3W and 4W RF model lags.",
+            "preview_rule": "When deployed_crews is empty, simulates 2 crews per ward across all 60 wards to rank baseline intervention ROI."
+        },
+        "summary": {
+            "total_crews_deployed": sum(w["crews_deployed"] for w in active),
+            "total_cases_prevented": round(sum(w["cases_prevented"] for w in active), 2),
+            "total_beds_saved": sum(w["beds_saved"] for w in active),
+            "total_saline_saved": sum(w["saline_saved"] for w in active)
+        },
+        "wards": wards_out
     }
