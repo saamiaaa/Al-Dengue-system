@@ -19,3 +19,46 @@ h1, h2, h3, h4, .font-heading {
   font-family: var(--font-heading), sans-serif;
   letter-spacing: -0.02em;
 }
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide the 60-ward background dashboard so it prints as 1 single page */
+  #dashboard-shell,
+  .no-print {
+    display: none !important;
+  }
+
+  #dispatch-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+  }
+
+  #dispatch-modal-card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  #printable-brief {
+    border: 1px solid #cbd5e1 !important;
+    padding: 20px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
