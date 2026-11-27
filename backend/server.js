@@ -499,6 +499,58 @@ app.get("/api/overflow", async (req, res) => {
 });
 
 
+
+//MODULE-3: Simulation proxy
+
+async function runSimulationProxy(date, deployedCrews, res) {
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, error: "Date must be YYYY-MM-DD" });
+    }
+    if (!deployedCrews || typeof deployedCrews !== "object" || Array.isArray(deployedCrews)) {
+        return res.status(400).json({ success: false, error: "deployed_crews must be an object mapping ward_id to crew count" });
+    }
+
+    const cleanCrews = {};
+    for (const [wardId, count] of Object.entries(deployedCrews)) {
+        const n = Number(count);
+        if (!Number.isInteger(n) || n < 0 || n > 50) {
+            return res.status(400).json({ success: false, error: `Invalid crew count for ${wardId}` });
+        }
+        if (n > 0) cleanCrews[wardId] = n;
+    }
+
+    const payload = { date: date || null, deployed_crews: cleanCrews };
+    try {
+        const result = await cachedCall(
+            `sim|${date || "latest"}|${stableKey(cleanCrews)}`,
+            "/simulate",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            }
+        );
+        if (result.status !== 200) return res.status(result.status).json(errorBody(result));
+        res.json({ ...result.data, cached: result.cached });
+    } catch (_) {
+        mlDown(res);
+    }
+}
+
+app.get("/api/simulate", async (req, res) => {
+    const date = req.query.date ? String(req.query.date) : "";
+    await runSimulationProxy(date, {}, res);
+});
+
+app.post("/api/simulate", async (req, res) => {
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const date = body.date ? String(body.date) : "";
+    const deployedCrews = body.deployed_crews || {};
+    await runSimulationProxy(date, deployedCrews, res);
+});
+
+
+
 app.use((err, req, res, next) => {
     res.status(400).json({ success: false, error: "Invalid request" });
 });
