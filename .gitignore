@@ -55,4 +55,3 @@ __pycache__/
 *.pkl
 
 # Trained ML models
-Al/ML/models/*.joblib
