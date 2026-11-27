@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Navbar from "./Components/Navbar";
 import SidebarControls from "./Components/SidebarControls";
+import {
+  fetchWardsData,
+  fetchAllocation,
+  fetchOverflow,
+  fetchVectorSimulation,
+  fetchDispatchNotices,
+} from "../lib/api";
 import {
   AlertTriangle,
   BedDouble,
@@ -17,231 +24,148 @@ import {
   X,
 } from "lucide-react";
 
-const BASELINE_WARDS = [
-  { ward_id: "DNCC_Ward_01", city: "Dhaka North", pop_density: 68500, water_logging: 0.89, predicted_cases: 145, bed_capacity: 95 },
-  { ward_id: "DNCC_Ward_05", city: "Dhaka North", pop_density: 61200, water_logging: 0.82, predicted_cases: 112, bed_capacity: 85 },
-  { ward_id: "DNCC_Ward_12", city: "Dhaka North", pop_density: 44000, water_logging: 0.55, predicted_cases: 42, bed_capacity: 90 },
-  { ward_id: "DSCC_Ward_02", city: "Dhaka South", pop_density: 74200, water_logging: 0.92, predicted_cases: 168, bed_capacity: 110 },
-  { ward_id: "DSCC_Ward_08", city: "Dhaka South", pop_density: 58900, water_logging: 0.78, predicted_cases: 98, bed_capacity: 80 },
-  { ward_id: "DSCC_Ward_15", city: "Dhaka South", pop_density: 41500, water_logging: 0.49, predicted_cases: 36, bed_capacity: 95 },
-  { ward_id: "CCC_Ward_01", city: "Chattogram", pop_density: 64024, water_logging: 0.87, predicted_cases: 124, bed_capacity: 80 },
-  { ward_id: "CCC_Ward_04", city: "Chattogram", pop_density: 48200, water_logging: 0.64, predicted_cases: 58, bed_capacity: 75 },
-  { ward_id: "CCC_Ward_09", city: "Chattogram", pop_density: 37500, water_logging: 0.45, predicted_cases: 28, bed_capacity: 85 },
-  { ward_id: "GCC_Ward_01", city: "Gazipur", pop_density: 51000, water_logging: 0.81, predicted_cases: 84, bed_capacity: 55 },
-  { ward_id: "GCC_Ward_03", city: "Gazipur", pop_density: 35400, water_logging: 0.52, predicted_cases: 31, bed_capacity: 60 },
-  { ward_id: "NCC_Ward_01", city: "Narayanganj", pop_density: 56300, water_logging: 0.85, predicted_cases: 92, bed_capacity: 60 },
-  { ward_id: "NCC_Ward_05", city: "Narayanganj", pop_density: 40043, water_logging: 0.90, predicted_cases: 48, bed_capacity: 65 },
-];
-
 export default function Home() {
   const [selectedCity, setSelectedCity] = useState("ALL");
   const [selectedWard, setSelectedWard] = useState("ALL");
+  const [horizon, setHorizon] = useState(2);
+  const [selectedDate, setSelectedDate] = useState("2025-08-25");
+  const [availableDates, setAvailableDates] = useState(["2025-08-25"]);
+
   const [stockPercentage, setStockPercentage] = useState(100);
-  const [totalCrews, setTotalCrews] = useState(60);
-  const [isOfflineMode, setIsOfflineMode] = useState(true);
+  const [totalCrews, setTotalCrews] = useState(25);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [activeTab, setActiveTab] = useState("allocation");
 
-  const [deployedCrews, setDeployedCrews] = useState({
-    DSCC_Ward_02: 4,
-    DNCC_Ward_01: 3,
-    CCC_Ward_01: 3,
-  });
+  const [allocationRes, setAllocationRes] = useState(null);
+  const [overflowRes, setOverflowRes] = useState(null);
+  const [simRes, setSimRes] = useState(null);
+  const [deployedCrews, setDeployedCrews] = useState({});
 
-  const [dispatchWard, setDispatchWard] = useState(null);
+  const [dispatchData, setDispatchData] = useState(null);
+  const [dispatchChannel, setDispatchChannel] = useState("whatsapp");
   const [copiedText, setCopiedText] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchWardsData().then((res) => {
+      if (!active) return;
+      if (Array.isArray(res.available_dates) && res.available_dates.length > 0) {
+        setAvailableDates(res.available_dates);
+      }
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      const [alloc, over] = await Promise.all([
+        fetchAllocation({ horizon, stock: stockPercentage, crews: totalCrews, date: selectedDate }),
+        fetchOverflow({ horizon, date: selectedDate }),
+      ]);
+      if (!active) return;
+      setAllocationRes(alloc);
+      setOverflowRes(over);
+      setIsOfflineMode(Boolean(alloc.offline_fallback || over.offline_fallback));
+    }, 150);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [horizon, stockPercentage, totalCrews, selectedDate]);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      const sim = await fetchVectorSimulation({ date: selectedDate, deployed_crews: deployedCrews });
+      if (!active) return;
+      setSimRes(sim);
+      if (sim.offline_fallback) setIsOfflineMode(true);
+    }, 180);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [selectedDate, deployedCrews]);
 
   const handleResetDefaults = () => {
     setSelectedCity("ALL");
     setSelectedWard("ALL");
     setStockPercentage(100);
-    setTotalCrews(60);
+    setTotalCrews(25);
+    setHorizon(2);
   };
 
-  // Pure functional reduction (fixes ESLint mutation warnings)
-  const allocatedData = useMemo(() => {
-    const enriched = BASELINE_WARDS.map((w) => {
-      const reqSaline = Math.round(w.predicted_cases * 2.4);
-      const reqKits = Math.round(w.predicted_cases * 1.15);
-      const reqBeds = Math.round(w.predicted_cases * 0.65);
-      const priorityScore = w.predicted_cases * (w.pop_density / 50000) * (1 + w.water_logging);
-      return { ...w, reqSaline, reqKits, reqBeds, priorityScore };
-    });
-
-    const sorted = [...enriched].sort((a, b) => b.priorityScore - a.priorityScore);
-    const totalReqSaline = sorted.reduce((acc, w) => acc + w.reqSaline, 0);
-    const totalReqKits = sorted.reduce((acc, w) => acc + w.reqKits, 0);
-    const totalPriority = sorted.reduce((acc, w) => acc + w.priorityScore, 0);
-
-    const initialPool = {
-      saline: Math.round(totalReqSaline * (stockPercentage / 100)),
-      kits: Math.round(totalReqKits * (stockPercentage / 100)),
-      crews: totalCrews,
-      items: [],
-    };
-
-    return sorted.reduce((acc, w) => {
-      const allocSaline = Math.min(w.reqSaline, acc.saline);
-      const allocKits = Math.min(w.reqKits, acc.kits);
-      const idealCrews = Math.max(1, Math.round((w.priorityScore / totalPriority) * totalCrews));
-      const allocCrews = Math.min(idealCrews, acc.crews);
-
-      const salineDeficit = w.reqSaline - allocSaline;
-      const kitDeficit = w.reqKits - allocKits;
-      const hasDeficit = salineDeficit > 0 || kitDeficit > 0;
-
-      const riskTier =
-        w.predicted_cases >= 120
-          ? "Critical"
-          : w.predicted_cases >= 80
-          ? "High"
-          : w.predicted_cases >= 40
-          ? "Medium"
-          : "Low";
-
-      return {
-        saline: acc.saline - allocSaline,
-        kits: acc.kits - allocKits,
-        crews: acc.crews - allocCrews,
-        items: [
-          ...acc.items,
-          {
-            ...w,
-            allocSaline,
-            allocKits,
-            allocCrews,
-            salineDeficit,
-            kitDeficit,
-            hasDeficit,
-            riskTier,
-          },
-        ],
-      };
-    }, initialPool).items;
-  }, [stockPercentage, totalCrews]);
+  const overflowByWard = useMemo(() => {
+    const map = {};
+    (overflowRes?.wards || []).forEach((w) => { map[w.ward_id] = w; });
+    return map;
+  }, [overflowRes]);
 
   const visibleWards = useMemo(() => {
-    return allocatedData.filter((w) => {
+    return (allocationRes?.wards || []).filter((w) => {
       if (selectedCity !== "ALL" && w.city !== selectedCity) return false;
       if (selectedWard !== "ALL" && w.ward_id !== selectedWard) return false;
       return true;
     });
-  }, [allocatedData, selectedCity, selectedWard]);
+  }, [allocationRes, selectedCity, selectedWard]);
 
-  const overflowRouting = useMemo(() => {
-    const cities = [...new Set(BASELINE_WARDS.map((w) => w.city))];
-    const routes = [];
-    const citySummary = [];
+  const visibleCities = useMemo(() => {
+    return (overflowRes?.cities || []).filter(
+      (c) => selectedCity === "ALL" || c.city === selectedCity
+    );
+  }, [overflowRes, selectedCity]);
 
-    cities.forEach((city) => {
-      if (selectedCity !== "ALL" && city !== selectedCity) return;
-      const cityWards = allocatedData.filter((w) => w.city === city);
+  const visibleTransfers = useMemo(() => {
+    return (overflowRes?.transfers || []).filter(
+      (t) => selectedCity === "ALL" || t.city === selectedCity
+    );
+  }, [overflowRes, selectedCity]);
 
-      const totalCap = cityWards.reduce((s, w) => s + w.bed_capacity, 0);
-      const totalDemand = cityWards.reduce((s, w) => s + w.reqBeds, 0);
-
-      const deficitWards = cityWards
-        .filter((w) => w.reqBeds > w.bed_capacity)
-        .map((w) => ({ ...w, overflow: w.reqBeds - w.bed_capacity }));
-
-      const surplusWards = cityWards
-        .filter((w) => w.bed_capacity > w.reqBeds)
-        .map((w) => ({ ...w, spare: w.bed_capacity - w.reqBeds }));
-
-      deficitWards.forEach((dw) => {
-        let needed = dw.overflow;
-        surplusWards.forEach((sw) => {
-          if (needed > 0 && sw.spare > 0) {
-            const transfer = Math.min(needed, sw.spare);
-            routes.push({
-              city,
-              fromWard: dw.ward_id,
-              toWard: sw.ward_id,
-              patientsRouted: transfer,
-              remainingSurplus: sw.spare - transfer,
-            });
-            sw.spare -= transfer;
-            needed -= transfer;
-          }
-        });
-        if (needed > 0) {
-          routes.push({
-            city,
-            fromWard: dw.ward_id,
-            toWard: "UNMET REGIONAL SURGE",
-            patientsRouted: needed,
-            remainingSurplus: 0,
-            unmet: true,
-          });
-        }
-      });
-
-      citySummary.push({
-        city,
-        totalCap,
-        totalDemand,
-        utilizationPct: Math.round((totalDemand / totalCap) * 100),
-        headroom: Math.max(0, totalCap - totalDemand),
-      });
+  const visibleSimWards = useMemo(() => {
+    return (simRes?.wards || []).filter((w) => {
+      if (selectedCity !== "ALL" && w.city !== selectedCity) return false;
+      if (selectedWard !== "ALL" && w.ward_id !== selectedWard) return false;
+      return true;
     });
-
-    return { routes, citySummary };
-  }, [allocatedData, selectedCity]);
-
-  const simulationResults = useMemo(() => {
-    return visibleWards
-      .map((w) => {
-        const crewsAssigned = deployedCrews[w.ward_id] || 0;
-        const effectiveness = 0.14 * (0.6 + w.water_logging * 0.5);
-        const reductionFactor = 1 - Math.exp(-effectiveness * crewsAssigned);
-        const casesPrevented = Math.round(w.predicted_cases * reductionFactor * 0.65);
-        const postCases = w.predicted_cases - casesPrevented;
-        const bedsSaved = Math.round(casesPrevented * 0.65);
-        const salineSaved = Math.round(casesPrevented * 2.4);
-        const roiPerCrew = crewsAssigned > 0 ? (casesPrevented / crewsAssigned).toFixed(1) : "0.0";
-
-        return {
-          ...w,
-          crewsAssigned,
-          casesPrevented,
-          postCases,
-          bedsSaved,
-          salineSaved,
-          roiPerCrew: parseFloat(roiPerCrew),
-        };
-      })
-      .sort((a, b) => b.roiPerCrew - a.roiPerCrew);
-  }, [visibleWards, deployedCrews]);
+  }, [simRes, selectedCity, selectedWard]);
 
   const updateCrewCount = (wardId, delta) => {
     setDeployedCrews((prev) => {
       const current = prev[wardId] || 0;
-      const next = Math.max(0, Math.min(15, current + delta));
-      return { ...prev, [wardId]: next };
+      const next = Math.max(0, Math.min(10, current + delta));
+      const updated = { ...prev, [wardId]: next };
+      if (next === 0) delete updated[wardId];
+      return updated;
     });
   };
 
-  const getDispatchText = (w) => {
-    return `[DENGUE COMMAND ALERT - ${w.city.toUpperCase()}]
-Ward: ${w.ward_id} | Risk: ${w.riskTier.toUpperCase()}
-2-4 Wk Forecast: ${w.predicted_cases} Cases
-Allocated Supplies (Stock @ ${stockPercentage}%):
-- Saline Bags: ${w.allocSaline}/${w.reqSaline} ${w.salineDeficit > 0 ? `(DEFICIT: -${w.salineDeficit})` : "(OK)"}
-- Diagnostic Kits: ${w.allocKits}/${w.reqKits} ${w.kitDeficit > 0 ? `(DEFICIT: -${w.kitDeficit})` : "(OK)"}
-- Hospital Beds Req: ${w.reqBeds} (Local Cap: ${w.bed_capacity})
-- Spraying Crews Assigned: ${w.allocCrews} Teams
-Action: Immediate larvicide fogging in high water-logging zones.`;
+  const handleOpenDispatch = async (wardId) => {
+    const res = await fetchDispatchNotices({
+      horizon,
+      stock: stockPercentage,
+      crews: totalCrews,
+      date: selectedDate,
+      ward: wardId,
+    });
+    const notice = res.notices?.[0] || null;
+    setDispatchData(notice);
+    setCopiedText(false);
   };
 
-  const handleCopySms = (text) => {
+  const handleCopyNotice = (text) => {
     navigator.clipboard.writeText(text);
     setCopiedText(true);
     setTimeout(() => setCopiedText(false), 2000);
   };
 
-  const totalCases = visibleWards.reduce((s, w) => s + w.predicted_cases, 0);
-  const totalSalineAlloc = visibleWards.reduce((s, w) => s + w.allocSaline, 0);
-  const totalSalineReq = visibleWards.reduce((s, w) => s + w.reqSaline, 0);
-  const deficitWardCount = visibleWards.filter((w) => w.hasDeficit).length;
+  const totalCases = visibleWards.reduce((s, w) => s + Number(w.predicted_cases || 0), 0);
+  const totalSalineAlloc = visibleWards.reduce((s, w) => s + (w.allocated?.saline_bags_needed || 0), 0);
+  const totalSalineReq = visibleWards.reduce((s, w) => s + (w.required?.saline_bags_needed || 0), 0);
+  const deficitWardCount = visibleWards.filter((w) => w.deficit_alert).length;
+  const totalRoutedPatients = visibleTransfers.reduce((s, t) => s + (t.patients || 0), 0);
 
   return (
     <Navbar>
@@ -266,21 +190,49 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                 Urban Dengue Outbreak &amp; Resource Dispatch System
               </h2>
               <p className="text-xs text-slate-500">
-                2-to-4-Week Forecast, Scarcity Optimization &amp; Intra-City Surge Routing
+                2-to-4-Week Random Forest Forecast, Scarcity Optimization &amp; Intra-City Surge Routing
               </p>
             </div>
-            <button
-              onClick={() => setIsOfflineMode(!isOfflineMode)}
-              className="self-start px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 cursor-pointer"
-            >
-              Toggle Engine Mode ({isOfflineMode ? "Offline Safe" : "Live API"})
-            </button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label="Forecast Horizon"
+                value={horizon}
+                onChange={(e) => setHorizon(Number(e.target.value))}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-800 cursor-pointer"
+              >
+                <option value={2}>+2 Weeks Horizon</option>
+                <option value={3}>+3 Weeks Horizon</option>
+                <option value={4}>+4 Weeks Horizon</option>
+              </select>
+
+              <select
+                aria-label="Forecast Date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-800 cursor-pointer"
+              >
+                {availableDates.slice(-24).map((d) => (
+                  <option key={d} value={d}>
+                    Date: {d}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {(allocationRes?.summary?.warnings || []).length > 0 && (
+            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-300 text-xs font-bold text-red-800 space-y-1">
+              {allocationRes.summary.warnings.map((w, idx) => (
+                <div key={idx}>🚨 {w}</div>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <p className="text-xs font-medium text-slate-500 uppercase">Projected Cases (2-4 Wks)</p>
-              <p className="text-2xl font-bold text-slate-900 mt-1">{totalCases.toLocaleString()}</p>
+              <p className="text-xs font-medium text-slate-500 uppercase">Projected Cases (+{horizon}W)</p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalCases.toFixed(1)}</p>
               <p className="text-xs text-rose-600 mt-1">Across {visibleWards.length} active wards</p>
             </div>
 
@@ -293,7 +245,7 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                 {totalSalineAlloc.toLocaleString()}{" "}
                 <span className="text-sm font-normal text-slate-400">/ {totalSalineReq.toLocaleString()}</span>
               </p>
-              <p className="text-xs text-slate-500 mt-1">Stock level at {stockPercentage}%</p>
+              <p className="text-xs text-slate-500 mt-1">Regional stock at {stockPercentage}%</p>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -310,9 +262,7 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                 <p className="text-xs font-medium text-slate-500 uppercase">Overflow Transfers</p>
                 <ArrowRightLeft className="w-4 h-4 text-amber-500" />
               </div>
-              <p className="text-2xl font-bold text-slate-900 mt-1">
-                {overflowRouting.routes.reduce((s, r) => s + r.patientsRouted, 0)} Patients
-              </p>
+              <p className="text-2xl font-bold text-slate-900 mt-1">{totalRoutedPatients} Patients</p>
               <p className="text-xs text-slate-500 mt-1">Intra-city bed balancing</p>
             </div>
           </div>
@@ -326,7 +276,7 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              1. Constrained Resource Allocation
+              1. Constrained Resource Allocation ({visibleWards.length})
             </button>
             <button
               onClick={() => setActiveTab("overflow")}
@@ -336,7 +286,7 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                   : "border-transparent text-slate-500 hover:text-slate-800"
               }`}
             >
-              2. Hospital Surge &amp; Overflow Routing
+              2. Hospital Surge &amp; Overflow Routing ({visibleTransfers.length})
             </button>
             <button
               onClick={() => setActiveTab("simulator")}
@@ -352,95 +302,103 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
 
           {activeTab === "allocation" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div className="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2">
                 <h3 className="font-bold text-slate-800">
                   Priority-Ranked Ward Supply &amp; Crew Allocation
                 </h3>
                 <span className="text-xs text-slate-500">
-                  Sorted by Risk × Population Density × Water-Logging Index
+                  Rates: 2.38 Saline • 1.16 Kits • 0.29 Beds / Case | Priority: Risk → Density → Cases
                 </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
                     <tr>
-                      <th className="py-3 px-4">Ward &amp; Density</th>
+                      <th className="py-3 px-4">Rank &amp; Ward</th>
                       <th className="py-3 px-4">Risk &amp; Cases</th>
                       <th className="py-3 px-4">Saline (Alloc/Req)</th>
                       <th className="py-3 px-4">Test Kits (Alloc/Req)</th>
                       <th className="py-3 px-4">Beds (Req/Cap)</th>
                       <th className="py-3 px-4">Crews</th>
-                      <th className="py-3 px-4">Status / Action</th>
+                      <th className="py-3 px-4">Status / Dispatch</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {visibleWards.map((w) => (
-                      <tr key={w.ward_id} className="hover:bg-slate-50/80">
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-900">{w.ward_id}</div>
-                          <div className="text-xs text-slate-500">
-                            {w.city} • {w.pop_density.toLocaleString()}/km²
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-block px-2 py-0.5 text-xs font-bold rounded ${
-                              w.riskTier === "Critical"
-                                ? "bg-red-100 text-red-700"
-                                : w.riskTier === "High"
-                                ? "bg-orange-100 text-orange-700"
-                                : w.riskTier === "Medium"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-emerald-100 text-emerald-700"
-                            }`}
-                          >
-                            {w.riskTier} ({w.predicted_cases})
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">
-                          <span className={w.salineDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
-                            {w.allocSaline}
-                          </span>{" "}
-                          / {w.reqSaline}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">
-                          <span className={w.kitDeficit > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
-                            {w.allocKits}
-                          </span>{" "}
-                          / {w.reqKits}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">
-                          <span className={w.reqBeds > w.bed_capacity ? "text-amber-600 font-bold" : "text-slate-800"}>
-                            {w.reqBeds}
-                          </span>{" "}
-                          / {w.bed_capacity}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 px-2 py-1 rounded">
-                            <SprayCan className="w-3 h-3 text-rose-600" /> {w.allocCrews}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            {w.hasDeficit ? (
-                              <span className="px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded">
-                                DEFICIT
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700 rounded">
-                                FULFILLED
-                              </span>
-                            )}
-                            <button
-                              onClick={() => setDispatchWard(w)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 rounded-md cursor-pointer"
+                    {visibleWards.map((w) => {
+                      const ow = overflowByWard[w.ward_id];
+                      const bedCap = ow?.bed_capacity ?? 1;
+                      const bedReq = w.required?.hospital_beds_required ?? 0;
+                      return (
+                        <tr key={w.ward_id} className="hover:bg-slate-50/80">
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900">
+                              <span className="text-slate-400 mr-1.5">#{w.rank}</span>
+                              {w.ward_id}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-block px-2 py-0.5 text-xs font-bold rounded ${
+                                w.risk_level === "Critical"
+                                  ? "bg-red-100 text-red-700"
+                                  : w.risk_level === "High"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : w.risk_level === "Medium"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-emerald-100 text-emerald-700"
+                              }`}
                             >
-                              <Send className="w-3 h-3" /> Dispatch
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              {w.risk_level} ({w.predicted_cases})
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs">
+                            <span className={w.deficit?.saline_bags_needed > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
+                              {w.allocated?.saline_bags_needed}
+                            </span>{" "}
+                            / {w.required?.saline_bags_needed}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs">
+                            <span className={w.deficit?.diagnostic_kits_needed > 0 ? "text-red-600 font-bold" : "text-slate-800"}>
+                              {w.allocated?.diagnostic_kits_needed}
+                            </span>{" "}
+                            / {w.required?.diagnostic_kits_needed}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs">
+                            <span className={bedReq > bedCap ? "text-amber-600 font-bold" : "text-slate-800"}>
+                              {bedReq}
+                            </span>{" "}
+                            / {bedCap}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 px-2 py-1 rounded">
+                              <SprayCan className="w-3 h-3 text-rose-600" /> {w.crews_assigned}/{w.crews_needed}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {w.deficit_alert ? (
+                                <span className="px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded">
+                                  DEFICIT ({w.fulfilment_pct}%)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700 rounded">
+                                  FULFILLED
+                                </span>
+                              )}
+                              <button
+                                onClick={() => handleOpenDispatch(w.ward_id)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 rounded-md cursor-pointer"
+                              >
+                                <Send className="w-3 h-3" /> Dispatch
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -450,31 +408,31 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
           {activeTab === "overflow" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {overflowRouting.citySummary.map((c) => (
+                {visibleCities.map((c) => (
                   <div key={c.city} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-bold text-slate-800">{c.city}</h3>
                       <span
                         className={`text-xs font-bold px-2 py-0.5 rounded ${
-                          c.utilizationPct > 100
+                          c.utilization_pct > 100
                             ? "bg-red-100 text-red-700"
-                            : c.utilizationPct > 85
+                            : c.utilization_pct > 85
                             ? "bg-amber-100 text-amber-700"
                             : "bg-emerald-100 text-emerald-700"
                         }`}
                       >
-                        {c.utilizationPct}% Utilized
+                        {c.utilization_pct}% Utilized
                       </span>
                     </div>
                     <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2">
                       <div
-                        className={`h-full ${c.utilizationPct > 100 ? "bg-red-600" : "bg-rose-500"}`}
-                        style={{ width: `${Math.min(100, c.utilizationPct)}%` }}
+                        className={`h-full ${c.utilization_pct > 100 ? "bg-red-600" : "bg-rose-500"}`}
+                        style={{ width: `${Math.min(100, c.utilization_pct)}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-xs text-slate-500">
-                      <span>Demand: {c.totalDemand} beds</span>
-                      <span>Headroom: {c.headroom} free</span>
+                      <span>Demand: {c.total_demand} / {c.total_capacity} beds</span>
+                      <span>Headroom: {c.headroom_after} free</span>
                     </div>
                   </div>
                 ))}
@@ -485,32 +443,27 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                   <BedDouble className="w-5 h-5 text-rose-600" />
                   Automated Intra-City Overflow Patient Transfers
                 </h3>
-                {overflowRouting.routes.length === 0 ? (
+                {visibleTransfers.length === 0 ? (
                   <p className="text-sm text-slate-500">
-                    No cross-ward hospital overflow detected for the selected jurisdiction.
+                    No cross-ward hospital overflow detected for this horizon/date. Try +3 Weeks or 2025-08-25.
                   </p>
                 ) : (
                   <div className="space-y-2.5">
-                    {overflowRouting.routes.map((r, idx) => (
+                    {visibleTransfers.map((r, idx) => (
                       <div
                         key={idx}
-                        className={`flex flex-wrap items-center justify-between p-3 rounded-lg border text-sm ${
-                          r.unmet
-                            ? "bg-red-50 border-red-200 text-red-900"
-                            : "bg-slate-50 border-slate-200 text-slate-800"
-                        }`}
+                        className="flex flex-wrap items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800"
                       >
                         <div className="flex items-center gap-2 font-medium">
                           <span className="text-xs font-bold uppercase px-2 py-0.5 bg-white border rounded">
                             {r.city}
                           </span>
-                          <span className="font-bold text-rose-700">{r.fromWard}</span>
+                          <span className="font-bold text-rose-700">{r.from_ward}</span>
                           <span>➔</span>
-                          <span className="font-bold text-emerald-700">{r.toWard}</span>
+                          <span className="font-bold text-emerald-700">{r.to_ward}</span>
                         </div>
-                        <div className="text-xs font-semibold">
-                          {r.patientsRouted} Patients Routed{" "}
-                          {!r.unmet && `(Receiving Ward Spare: ${r.remainingSurplus} beds)`}
+                        <div className="text-xs font-semibold text-slate-700">
+                          {r.patients} Patient(s) Routed Intra-City
                         </div>
                       </div>
                     ))}
@@ -522,18 +475,30 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
 
           {activeTab === "simulator" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-slate-800 flex items-center gap-2">
                     <TrendingDown className="w-5 h-5 text-emerald-600" />
-                    2-to-4-Week Larvicide &amp; Fogging Impact Simulator
+                    Model-Driven 2-to-4-Week Vector Control Impact Simulator
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Deploy crews to specific wards to simulate downstream case, bed &amp; saline reductions ranked by ROI
+                    {simRes?.preview_mode
+                      ? "Showing 2-crew benchmark across all wards — click +/- on any ward to simulate custom deployment"
+                      : "Simulating your custom crew deployment through Random Forest 2W → 3W → 4W models"}
                   </p>
                 </div>
-                <div className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg">
-                  Total Cases Prevented: {simulationResults.reduce((s, w) => s + w.casesPrevented, 0)}
+                <div className="flex items-center gap-2">
+                  {!simRes?.preview_mode && (
+                    <button
+                      onClick={() => setDeployedCrews({})}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                    >
+                      Reset Benchmark
+                    </button>
+                  )}
+                  <div className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg">
+                    Cases Prevented: {simRes?.summary?.total_cases_prevented ?? 0} | Beds Saved: {simRes?.summary?.total_beds_saved ?? 0} | Saline Saved: {simRes?.summary?.total_saline_saved ?? 0}
+                  </div>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -542,63 +507,58 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
                     <tr>
                       <th className="py-3 px-4">ROI Rank &amp; Ward</th>
                       <th className="py-3 px-4">Deploy Crews</th>
-                      <th className="py-3 px-4">Baseline ➔ Post-Control Cases</th>
+                      <th className="py-3 px-4">Baseline ➔ Simulated (2–4W)</th>
                       <th className="py-3 px-4">Beds Saved</th>
                       <th className="py-3 px-4">Saline Saved</th>
                       <th className="py-3 px-4">ROI (Cases / Crew)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {simulationResults.map((w, index) => (
-                      <tr key={w.ward_id} className="hover:bg-slate-50">
-                        <td className="py-3 px-4">
-                          <span className="font-bold text-slate-400 mr-2">#{index + 1}</span>
-                          <span className="font-semibold text-slate-900">{w.ward_id}</span>
-                          <span className="block text-xs text-slate-500 ml-6">
-                            Water-Logging Risk: {(w.water_logging * 100).toFixed(0)}%
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                            <button
-                              onClick={() => updateCrewCount(w.ward_id, -1)}
-                              className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                            >
-                              -
-                            </button>
-                            <span className="w-6 text-center font-bold text-xs">
-                              {w.crewsAssigned}
+                    {visibleSimWards.map((w) => {
+                      const activeCrews = simRes?.preview_mode ? w.crews_deployed : (deployedCrews[w.ward_id] || 0);
+                      return (
+                        <tr key={w.ward_id} className="hover:bg-slate-50">
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-slate-400 mr-2">#{w.roi_rank}</span>
+                            <span className="font-semibold text-slate-900">{w.ward_id}</span>
+                            <span className="block text-xs text-slate-500 ml-6">
+                              {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
                             </span>
-                            <button
-                              onClick={() => updateCrewCount(w.ward_id, 1)}
-                              className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                            >
-                              +
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-xs">
-                          <span className="text-slate-500 line-through mr-1">{w.predicted_cases}</span>
-                          ➔ <span className="font-bold text-emerald-700">{w.postCases}</span>{" "}
-                          {w.casesPrevented > 0 && (
-                            <span className="text-emerald-600 font-semibold">
-                              (-{w.casesPrevented})
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                              <button
+                                onClick={() => updateCrewCount(w.ward_id, -1)}
+                                className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
+                              >
+                                -
+                              </button>
+                              <span className="w-6 text-center font-bold text-xs">{activeCrews}</span>
+                              <button
+                                onClick={() => updateCrewCount(w.ward_id, 1)}
+                                className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs">
+                            <span className="text-slate-500 line-through mr-1">{w.baseline_cases?.total}</span>
+                            ➔ <span className="font-bold text-emerald-700">{w.simulated_cases?.total}</span>{" "}
+                            {w.cases_prevented > 0 && (
+                              <span className="text-emerald-600 font-semibold">(-{w.cases_prevented})</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-xs font-semibold text-slate-700">-{w.beds_saved} beds</td>
+                          <td className="py-3 px-4 text-xs font-semibold text-slate-700">-{w.saline_saved} bags</td>
+                          <td className="py-3 px-4">
+                            <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800">
+                              {w.roi_cases_per_crew} cases/crew
                             </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                          -{w.bedsSaved} beds
-                        </td>
-                        <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                          -{w.salineSaved} bags
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800">
-                            {w.roiPerCrew} cases/crew
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -606,32 +566,58 @@ Action: Immediate larvicide fogging in high water-logging zones.`;
           )}
         </div>
 
-        {dispatchWard && (
+        {dispatchData && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
               <div className="flex justify-between items-center border-b pb-3">
-                <h3 className="font-bold text-lg text-slate-900">
-                  Commissioner Dispatch Brief — {dispatchWard.ward_id}
-                </h3>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">
+                    Commissioner Dispatch Notice — {dispatchData.ward_id}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {dispatchData.city} • Rank #{dispatchData.rank} • {dispatchData.risk_level} Risk
+                  </p>
+                </div>
                 <button
-                  onClick={() => setDispatchWard(null)}
+                  onClick={() => setDispatchData(null)}
                   className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setDispatchChannel("whatsapp")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer ${
+                    dispatchChannel === "whatsapp" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  WhatsApp Brief
+                </button>
+                <button
+                  onClick={() => setDispatchChannel("sms")}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg cursor-pointer ${
+                    dispatchChannel === "sms" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  SMS Gateway Alert
+                </button>
+              </div>
+
               <pre className="bg-slate-900 text-emerald-300 p-4 rounded-xl text-xs font-mono whitespace-pre-wrap leading-relaxed">
-                {getDispatchText(dispatchWard)}
+                {dispatchChannel === "whatsapp" ? dispatchData.whatsapp : dispatchData.sms}
               </pre>
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <button
-                  onClick={() => handleCopySms(getDispatchText(dispatchWard))}
+                  onClick={() =>
+                    handleCopyNotice(dispatchChannel === "whatsapp" ? dispatchData.whatsapp : dispatchData.sms)
+                  }
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg cursor-pointer"
                 >
                   {copiedText ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                  {copiedText ? "Copied for SMS / WhatsApp!" : "Copy SMS / WhatsApp Alert"}
+                  {copiedText ? "Copied!" : `Copy ${dispatchChannel.toUpperCase()} Notice`}
                 </button>
                 <button
                   onClick={() => window.print()}
