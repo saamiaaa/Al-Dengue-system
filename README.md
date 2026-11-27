@@ -12,9 +12,9 @@ Our goal is to move beyond reactive dengue management by providing early risk in
 
 ## Team Members & their role ♡
 
-- **Samia Akhter (Team Leader): Al/ML
-- **Arpa Chowdhury: Frontend
-- **Altaf Uddin Sifat: Backend
+- Samia Akhter (Team Leader): Al/ML
+- Arpa Chowdhury: Frontend
+- Altaf Uddin Sifat: Backend
 
 ## Tech Stack
 
@@ -71,7 +71,7 @@ chatbot to produce predictions.
 
 ## .✦ ݁˖ Key Features
 
-- **Early-Warning Surveillance:** Tracks dengue outbreak risks across 10 wards.
+- **Early-Warning Surveillance:** Tracks dengue outbreak risks across 60 wards.
 - **Case Prediction:** Predicts potential dengue cases for 2, 3, and 4-week horizons.
 - **Risk Classification:** Categorizes wards into predicted risk tiers.
 - **Environmental Monitoring:** Tracks lagged rainfall and temperature indicators.
