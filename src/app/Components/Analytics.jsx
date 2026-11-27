@@ -28,15 +28,14 @@ const MODEL_VALIDATION_METRICS = [
 
 const Analytics = ({ selectedCity }) => {
   const [trendData, setTrendData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedCity, setLoadedCity] = useState("");
   const [isLiveApi, setIsLiveApi] = useState(false);
   const [activeWardLabel, setActiveWardLabel] = useState("");
 
   useEffect(() => {
     let mounted = true;
-    setIsLoading(true);
 
-    async function loadCityTrends() {
+    (async () => {
       try {
         const wardsRes = await fetchWardsData();
         if (!mounted) return;
@@ -49,12 +48,12 @@ const Analytics = ({ selectedCity }) => {
         if (!primaryWard) {
           setTrendData([]);
           setIsLiveApi(true);
+          setLoadedCity(selectedCity);
           return;
         }
 
         setActiveWardLabel(primaryWard.ward_name || primaryWard.ward_id);
 
-        // সর্বশেষ ৮টি তারিখ নিয়ে সাপ্তাহিক ট্রেন্ড তৈরি করা
         const dates = (wardsRes.available_dates || []).slice(-8);
 
         if (dates.length > 0) {
@@ -81,7 +80,6 @@ const Analytics = ({ selectedCity }) => {
 
           setTrendData(formatted);
         } else {
-          // যদি available_dates খালি থাকে, তবে বর্তমান ও ২-৪ সপ্তাহের ফোরকাস্ট দেখানো
           const latest = await fetchWardPrediction(primaryWard.ward_id);
           if (!mounted) return;
 
@@ -103,22 +101,22 @@ const Analytics = ({ selectedCity }) => {
         }
 
         setIsLiveApi(true);
-      } catch (_) {
+      } catch {
         if (mounted) {
           setIsLiveApi(false);
           setTrendData([]);
         }
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) setLoadedCity(selectedCity);
       }
-    }
+    })();
 
-    loadCityTrends();
     return () => {
       mounted = false;
     };
   }, [selectedCity]);
 
+  const isLoading = loadedCity !== selectedCity;
   const maxRain = Math.max(...trendData.map((d) => d.rainfall), 1);
   const maxCases = Math.max(...trendData.map((d) => d.cases), 1);
 
@@ -168,7 +166,7 @@ const Analytics = ({ selectedCity }) => {
           </div>
         ) : trendData.length === 0 ? (
           <div className="h-64 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-500">
-            No trend records available yet. Make sure Backend (Port 5000) & Python ML API (Port 8000) are running.
+            No trend records available yet. Make sure Backend (Port 5000) &amp; Python ML API (Port 8000) are running.
           </div>
         ) : (
           <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 pt-4 pb-2 px-3 bg-slate-50 rounded-xl border border-slate-200 items-end h-64">

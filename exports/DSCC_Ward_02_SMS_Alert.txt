@@ -1,0 +1,9 @@
+[DENGUE COMMAND ALERT - DHAKA SOUTH]
+Ward: DSCC_Ward_02 | Risk: CRITICAL
+2-4 Wk Forecast: 168 Cases | Pop Density: 74,200/km2
+Allocated Supplies (Stock @ 60% Scarcity Simulation):
+- Saline Bags: 242 / 403 (CRITICAL DEFICIT: -161 Bags)
+- Diagnostic Kits: 116 / 193 (CRITICAL DEFICIT: -77 Kits)
+- Hospital Beds Req: 109 (Local Cap: 110 - Near Saturation)
+- Spraying Crews Assigned: 9 Teams
+Action: Immediate larvicide fogging in high water-logging zones (Index: 0.92).
