@@ -1,0 +1,8 @@
+*DENGUE COMMAND NOTICE — DSCC_Ward_02 (Dhaka South)*
+Forecast Horizon: *+2 Weeks* (Data Date: 2025-08-25)
+• *Projected Cases:* 6.01 (*High Risk*, Priority Rank #37)
+• *Supply Status:* STOCK ADEQUATE (100% fulfilled)
+• *Saline Bags:* 14 allocated / 14 required (Deficit: 0)
+• *Diagnostic Kits:* 7 allocated / 7 required (Deficit: 0)
+• *Spraying Crews:* 0 assigned / 2 required
+• *Hospital Beds (2/3):* Local bed capacity sufficient; no transfer required.
