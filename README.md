@@ -1,48 +1,149 @@
 # DengueSense 𓆤
 
-### <p align="center">AI-Powered Dengue Outbreak Prediction System</p>
+<img width="960" height="540" alt="dengueSense" src="https://github.com/user-attachments/assets/953b0e13-64b4-4b24-94ef-ff91943918a5" />
 
-<img width="1440" height="900" alt="Screen Shot 2026-11-22 at 10 59 42 AM" src="https://github.com/user-attachments/assets/3f153290-3a85-4798-9685-dd38f500f10a" />
+### <p align="center">AI-Powered Dengue Outbreak Prediction & Public Health Resource Management System</p>
 
-<p align="center">DengueSense is an AI-powered surveillance platform designed to predict potential dengue outbreaks and support proactive public health management. By analyzing historical dengue cases and environmental factors, the system provides ward-level predictions, risk assessments, and preventive recommendations to help authorities make data-driven decisions.</p>
+<p align="center">DengueSense is an AI-powered public health surveillance and decision-support platform designed to predict dengue outbreaks, identify vulnerable communities, and optimize emergency resource allocation. By combining machine learning, environmental indicators, historical dengue data, and operational planning, the system transforms outbreak predictions into actionable public health interventions.</p>
 
-## 🎯 Project Goal
+## ഒ· Project Goal
 
-Our goal is to move beyond reactive dengue management by providing early risk insights, identifying vulnerable wards, and supporting targeted preventive action through machine learning and data-driven surveillance.
+Our goal is to move beyond reactive dengue management by building an intelligent early-warning and response system.
 
-## Team Members & their role ♡
+DengueSense aims to:
 
-- Samia Akhter (Team Leader): Al/ML
-- Arpa Chowdhury: Frontend
-- Altaf Uddin Sifat: Backend
+- Predict potential dengue outbreaks before they escalate.
+- Identify high-risk wards through localized risk assessment.
+- Understand environmental and historical factors contributing to outbreaks.
+- Estimate emergency healthcare resource requirements.
+- Optimize resource distribution across cities and wards.
+- Support faster, data-driven preventive interventions.
 
-## Tech Stack
+## 👥 Team Members & Their Roles ♡
 
-### Frontend
+- **Samia Akhter (Team Leader):** AI/ML Development & Integration
+- **Arpa Chowdhury:** Frontend Development
+- **Altaf Uddin Sifat:** Backend Development
+
+<p align="center">────۶ৎ────</p>
+
+## ✦ Key Features
+
+| Module | Description |
+|---|---|
+| Overview Dashboard | Centralized overview of dengue surveillance and outbreak risks |
+| AI Predictions | Ward-level dengue case forecasts |
+| Risk Map | Geographic visualization of predicted outbreak severity |
+| Analytics | Historical trends, environmental indicators, and prediction insights |
+| Ward Monitoring | Individual ward vulnerability and risk monitoring |
+| Alerts & Recommendations | Targeted preventive recommendations and alerts |
+| Resource Allocation | Intelligent distribution of emergency healthcare resources |
+| Overflow Management | Identification and handling of intra-city resource shortages |
+| Intervention Simulator | Evaluation of potential interventions across future planning horizons |
+| Data & Reports | Operational summaries and downloadable PDF/HTML reports |
+| Dispatch Preparation | SMS and WhatsApp-ready emergency communication |
+| Settings & Help | Platform configuration and documentation |
+
+## .⋆❀° Dataset & Machine Learning
+
+### Dataset Overview
+
+DengueSense uses a structured historical dataset containing:
+
+- **31,320 weekly records**
+- **60 wards**
+- **5 cities**
+- Historical coverage from January 2016 to December 2025
+
+The dataset combines epidemiological, environmental, demographic, and infrastructure-related information.
+
+### Feature Engineering
+
+The prediction pipeline uses historical and lagged features to capture delayed environmental effects on dengue transmission.
+
+Examples include:
+
+- Previous weeks' dengue case counts.
+- Lagged rainfall measurements.
+- Lagged temperature measurements.
+- Historical humidity patterns.
+- Waterlogging and sanitation indicators.
+
+These features help the model recognize patterns that may precede an increase in dengue cases.
+
+### Prediction Model
+
+DengueSense uses **Random Forest Regression** through Scikit-learn.
+
+The system was developed with separate forecasting horizons:
+
+- 2-week dengue prediction model.
+- 3-week dengue prediction model.
+- 4-week dengue prediction model.
+
+The trained models are serialized using Joblib and loaded by the FastAPI prediction service.
+
+### Healthcare Resource Targets
+
+The expanded dataset also incorporates operational demand targets:
+
+- `saline_bags_needed`
+- `diagnostic_kits_needed`
+- `hospital_beds_required`
+
+These variables support the resource-planning component by connecting expected outbreak demand with healthcare resource requirements.
+
+### Risk Classification
+
+Predicted dengue cases are translated into four operational risk categories:
+
+- Low
+- Medium
+- High
+- Critical
+
+These classifications support ward monitoring, alert prioritization, and intervention planning.
+
+## 🏗️ System Architecture
+
+DengueSense follows a multi-layer architecture:
+
+1. **Frontend Layer:** Displays predictions, analytics, maps, alerts, and resource planning information.
+2. **Backend Layer:** Handles application requests, data communication, and integration between frontend and ML services.
+3. **AI/ML Layer:** Processes historical and environmental data and generates dengue predictions.
+4. **Operational Intelligence Layer:** Uses prediction outputs to support resource allocation, overflow handling, intervention simulation, and report generation.
+
+<p align="center">────۶ৎ────</p>
+
+### Technology Stack
+
+#### Frontend
 - **Next.js 16** – React framework
 - **React 19** – User interface
 - **Tailwind CSS 4** – Styling
 - **DaisyUI 5** – UI components
 
-### Backend
+#### Backend
 - **Node.js** – JavaScript runtime
 - **Express.js 5** – REST API
 - **CORS** – Cross-origin resource sharing
 - **dotenv** – Environment configuration
 
-### AI/ML & Data Processing
+#### AI/ML & Data Processing
 - **Python** – Machine learning development
 - **Pandas** – Data processing
 - **NumPy** – Numerical computing
-- **Scikit-learn** – Machine learning and Random Forest models
+- **Scikit-learn** – Random Forest machine learning models
 - **Joblib** – Model serialization and loading
 - **OpenPyXL** – Excel file processing
-- **FastAPI** – Custom ML prediction API
+- **FastAPI** – ML prediction API
 - **Uvicorn** – ASGI server
 
-**Custom API:** DengueSense uses its own FastAPI-based prediction API to serve results from trained machine learning models. It does not depend on external generative AI APIs such as Gemini or OpenAI.
-
-## AI Tools
+#### Reporting & Operations
+- Python-based report generation
+- PDF and HTML export support
+- Deterministic resource allocation and overflow handling
+- SMS and WhatsApp-ready message generation
 
 AI Assistants: ChatGPT, Claude, & Google Gemini
 AI-powered development tools were used as supporting
@@ -69,39 +170,45 @@ using the project's dataset and machine learning
 pipeline, rather than relying on a generative AI
 chatbot to produce predictions.
 
-## .✦ ݁˖ Key Features
-
-- **Early-Warning Surveillance:** Tracks dengue outbreak risks across 60 wards.
-- **Case Prediction:** Predicts potential dengue cases for 2, 3, and 4-week horizons.
-- **Risk Classification:** Categorizes wards into predicted risk tiers.
-- **Environmental Monitoring:** Tracks lagged rainfall and temperature indicators.
-- **Risk Driver Breakdown:** Highlights factors influencing predicted outbreak risks.
-- **Hyper-Local Ward Vulnerability:** Provides ward-specific vulnerability insights.
-- **Preventive Recommendations:** Suggests targeted interventions based on predicted risk levels.
-
-## ★ Project Structure
+## ❦ Project Structure
 
 ```text
 Al-Dengue-system/
 │
-├── src/                  # Next.js frontend
+├── src/                         # Next.js frontend
 │
-├── backend/              # Node.js & Express backend
+├── backend/                     # Node.js & Express backend
 │
 ├── Al/
 │   └── ML/
-│       ├── train.py      # Model training
-│       ├── api.py        # FastAPI prediction API
-│       └── models/       # Trained ML models
+│       ├── data/
+│       │   └── dengue_dataset.xlsx
+│       │
+│       ├── models/
+│       │   ├── dengue_model_2w.joblib
+│       │   ├── dengue_model_3w.joblib
+│       │   └── dengue_model_4w.joblib
+│       │
+│       ├── operations/
+│       │   ├── allocation.py    # Constrained resource allocation
+│       │   ├── overflow.py      # Intra-city overflow management
+│       │   ├── simulator.py     # Intervention simulation
+│       │   └── dispatch.py      # Alert and dispatch preparation
+│       │
+│       ├── exports/             # Generated reports and exports
+│       │
+│       ├── train.py             # Model training
+│       └── api.py               # FastAPI prediction service
 │
 ├── package.json
+├── requirements.txt
 └── README.md
 ```
-<p align="center">────۶ৎ────</p>
 
-## Running Locally
+## 🚀 Running Locally
 
 ### Prerequisites
+
 - Node.js and npm
 - Python 3.9+
 - Git
@@ -131,11 +238,11 @@ Start the frontend:
 npm run dev
 ```
 
-Frontend runs at: `http://localhost:3000`
+Frontend: `http://localhost:3000`
 
 ### 3. Set Up the Backend
 
-Navigate to the backend directory:
+Open a separate terminal:
 
 ```bash
 cd backend
@@ -152,14 +259,28 @@ ML_API_URL=http://127.0.0.1:8000
 
 Start the backend using its configured npm start script.
 
-Backend runs at: `http://localhost:5000`
+Backend: `http://localhost:5000`
 
 ### 4. Set Up the Machine Learning API
 
-Open a new terminal from the project root:
+Open another terminal from the project root:
 
 ```bash
 cd Al/ML
+```
+
+Create a virtual environment:
+
+**Windows PowerShell:**
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+**macOS/Linux:**
+
+```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
@@ -176,23 +297,36 @@ Start the prediction API:
 python -m uvicorn api:app --reload --host 127.0.0.1 --port 8000
 ```
 
-ML API runs at: `http://127.0.0.1:8000`
+ML API: `http://127.0.0.1:8000`
 
-**Note:** Ensure the trained model files are present in the `models/` directory before starting the prediction API.
+API documentation: `http://127.0.0.1:8000/docs`
 
-<p align="center">────۶ৎ────</p>
+**Important:** Ensure the required trained model files are available in the `models/` directory. 
 
 ### 5. Access the Dashboard
 
-Once all three services are running, open:
+Once the frontend, backend, and ML API are running, visit:
 
-`http://localhost:3000`
+```text
+http://localhost:3000
+```
 
-Make sure the frontend, backend, and ML API are running simultaneously.
+All three services should remain active during local development.
+
+## ⁠♡ Deployment
+
+DengueSense uses a separated deployment architecture:
+
+- **Frontend:** Next.js web application.
+- **Backend:** Node.js and Express REST API.
+- **ML Service:** Python FastAPI prediction API.
+
+The ML service is independently deployable, allowing the frontend and backend to communicate with the prediction service through configured API URLs.
 
 ## 🌐 Demo
 
-**Live Website:** Will update soon.
+**Live Website:** https://al-dengue-system-frontend.vercel.app
+
 
 <p align="center">────۶ৎ────</p>
 
