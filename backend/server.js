@@ -551,6 +551,154 @@ app.post("/api/simulate", async (req, res) => {
 
 
 
+//MODULE-4: Dispatch notice builder
+function buildDispatchNotices(ward, overflowWard, overflowTransfers, horizon, dataDate) {
+    const outbound = overflowTransfers.filter((t) => t.from_ward === ward.ward_id);
+    const inbound = overflowTransfers.filter((t) => t.to_ward === ward.ward_id);
+
+    let bedRoutingText = "Local bed capacity sufficient; no transfer required.";
+    if (outbound.length > 0) {
+        const targets = outbound.map((t) => `${t.patients} pts -> ${t.to_ward}`).join(", ");
+        bedRoutingText = `OVERFLOW ROUTING: Transfer ${targets}`;
+        if (overflowWard && overflowWard.net_deficit > 0) {
+            bedRoutingText += ` (UNMET SURGE: ${overflowWard.net_deficit} pts exceed city capacity)`;
+        }
+    } else if (inbound.length > 0) {
+        const totalIn = inbound.reduce((sum, t) => sum + t.patients, 0);
+        const sources = inbound.map((t) => `${t.from_ward} (${t.patients})`).join(", ");
+        bedRoutingText = `RECEIVE OVERFLOW: Accept ${totalIn} pts from ${sources}`;
+    }
+
+    const statusLine = ward.deficit_alert ? ward.alert_message : "STOCK ADEQUATE (100% fulfilled)";
+    const bedCap = overflowWard ? overflowWard.bed_capacity : 1;
+    const bedReq = ward.required.hospital_beds_required;
+
+    const sms = [
+        `[DGHS DENGUE DISPATCH | ${ward.ward_id} - ${ward.city} | +${horizon}W]`,
+        `Date: ${dataDate} | Risk: ${ward.risk_level.toUpperCase()} | Pred Cases: ${ward.predicted_cases}`,
+        `Status: ${statusLine}`,
+        `Saline: ${ward.allocated.saline_bags_needed}/${ward.required.saline_bags_needed} | Kits: ${ward.allocated.diagnostic_kits_needed}/${ward.required.diagnostic_kits_needed}`,
+        `Crews: ${ward.crews_assigned}/${ward.crews_needed} assigned`,
+        `Beds: ${bedReq}/${bedCap} (${bedRoutingText})`
+    ].join("\n");
+
+    const whatsapp = [
+        `*DENGUE COMMAND NOTICE — ${ward.ward_id} (${ward.city})*`,
+        `Forecast Horizon: *+${horizon} Weeks* (Data Date: ${dataDate})`,
+        `• *Projected Cases:* ${ward.predicted_cases} (*${ward.risk_level} Risk*, Priority Rank #${ward.rank})`,
+        `• *Supply Status:* ${statusLine}`,
+        `• *Saline Bags:* ${ward.allocated.saline_bags_needed} allocated / ${ward.required.saline_bags_needed} required (Deficit: ${ward.deficit.saline_bags_needed})`,
+        `• *Diagnostic Kits:* ${ward.allocated.diagnostic_kits_needed} allocated / ${ward.required.diagnostic_kits_needed} required (Deficit: ${ward.deficit.diagnostic_kits_needed})`,
+        `• *Spraying Crews:* ${ward.crews_assigned} assigned / ${ward.crews_needed} required`,
+        `• *Hospital Beds (${bedReq}/${bedCap}):* ${bedRoutingText}`
+    ].join("\n");
+
+    return {
+        routing_instruction: bedRoutingText,
+        sms,
+        whatsapp,
+        brief: {
+            title: `Ward Commissioner Operational Brief — ${ward.ward_id}`,
+            city: ward.city,
+            ward_id: ward.ward_id,
+            data_date: dataDate,
+            horizon_weeks: horizon,
+            priority_rank: ward.rank,
+            population_density_sqkm: ward.population_density_sqkm,
+            current_cases: ward.current_cases,
+            predicted_cases: ward.predicted_cases,
+            risk_level: ward.risk_level,
+            fulfilment_pct: ward.fulfilment_pct,
+            deficit_alert: ward.deficit_alert,
+            alert_message: statusLine,
+            supplies: {
+                saline_bags: {
+                    required: ward.required.saline_bags_needed,
+                    allocated: ward.allocated.saline_bags_needed,
+                    deficit: ward.deficit.saline_bags_needed
+                },
+                diagnostic_kits: {
+                    required: ward.required.diagnostic_kits_needed,
+                    allocated: ward.allocated.diagnostic_kits_needed,
+                    deficit: ward.deficit.diagnostic_kits_needed
+                }
+            },
+            vector_control: {
+                crews_needed: ward.crews_needed,
+                crews_assigned: ward.crews_assigned,
+                crew_deficit: ward.crew_deficit
+            },
+            hospital_surge: {
+                local_bed_capacity: bedCap,
+                beds_required: bedReq,
+                net_deficit: overflowWard ? overflowWard.net_deficit : 0,
+                routing_instruction: bedRoutingText,
+                outbound_transfers: outbound,
+                inbound_transfers: inbound
+            }
+        }
+    };
+}
+
+app.get("/api/dispatch", async (req, res) => {
+    const horizon = Number(req.query.horizon || 2);
+    const stockPct = Number(req.query.stock === undefined ? 100 : req.query.stock);
+    const totalCrews = Number(req.query.crews === undefined ? 20 : req.query.crews);
+    const date = req.query.date ? String(req.query.date) : "";
+    const wardFilter = req.query.ward ? String(req.query.ward) : "";
+
+    if (!HORIZONS.includes(horizon)) {
+        return res.status(400).json({ success: false, error: "Horizon must be 2, 3 or 4 weeks." });
+    }
+    if (!Number.isFinite(stockPct) || stockPct < 30 || stockPct > 100) {
+        return res.status(400).json({ success: false, error: "stock must be between 30 and 100" });
+    }
+    if (!Number.isInteger(totalCrews) || totalCrews < 0 || totalCrews > 1000) {
+        return res.status(400).json({ success: false, error: "crews must be a whole number from 0 to 1000" });
+    }
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, error: "Date must be YYYY-MM-DD" });
+    }
+
+    const qs = date ? `&date=${encodeURIComponent(date)}` : "";
+
+    try {
+        const [forecast, capacity] = await Promise.all([
+            cachedCall(`forecast|${horizon}|${date || "latest"}`, `/forecast/all?horizon=${horizon}${qs}`),
+            cachedCall("capacity", "/capacity")
+        ]);
+        if (forecast.status !== 200) return res.status(forecast.status).json(errorBody(forecast));
+        if (capacity.status !== 200) return res.status(capacity.status).json(errorBody(capacity));
+
+        const allocation = buildAllocation(forecast.data.wards, stockPct, totalCrews);
+        const routing = buildOverflowRouting(allocation.wards, capacity.data.capacity);
+        const overflowByWard = {};
+        routing.wards.forEach((w) => { overflowByWard[w.ward_id] = w; });
+
+        const notices = allocation.wards
+            .filter((w) => !wardFilter || w.ward_id === wardFilter)
+            .map((w) => ({
+                ward_id: w.ward_id,
+                city: w.city,
+                rank: w.rank,
+                risk_level: w.risk_level,
+                predicted_cases: w.predicted_cases,
+                deficit_alert: w.deficit_alert,
+                ...buildDispatchNotices(w, overflowByWard[w.ward_id], routing.transfers, horizon, forecast.data.data_date)
+            }));
+
+        res.json({
+            success: true,
+            data_date: forecast.data.data_date,
+            horizon_weeks: horizon,
+            total_notices: notices.length,
+            notices
+        });
+    } catch (_) {
+        mlDown(res);
+    }
+});
+
 app.use((err, req, res, next) => {
     res.status(400).json({ success: false, error: "Invalid request" });
 });
