@@ -43,6 +43,93 @@ const getTier = (raw = "") => {
     : "Low";
 };
 
+// Generate ward-specific recommendations from actual ward data
+const buildWardActionBrief = (ward, allWards) => {
+  if (!ward) return null;
+
+  const average = (key) => {
+    if (!allWards.length) return 0;
+
+    return (
+      allWards.reduce(
+        (sum, item) => sum + Number(item[key] || 0),
+        0
+      ) / allWards.length
+    );
+  };
+
+  const averages = {
+    rain: average("rain"),
+    logging: average("logging"),
+    sanitation: average("sanitation"),
+    cases: average("cases"),
+  };
+
+  const signals = [];
+  const actions = [];
+
+  // Rainfall comparison
+  if (Number(ward.rain) > averages.rain) {
+    signals.push("Above-average rainfall");
+
+    actions.push(
+      "Inspect low-lying areas and remove stagnant water after rainfall."
+    );
+  }
+
+  // Waterlogging comparison
+  if (Number(ward.logging) > averages.logging) {
+    signals.push("Higher waterlogging risk");
+
+    actions.push(
+      "Prioritize blocked-drain inspections and stagnant-water removal."
+    );
+  }
+
+  // Sanitation comparison
+  if (Number(ward.sanitation) < averages.sanitation) {
+    signals.push("Below-average sanitation score");
+
+    actions.push(
+      "Arrange sanitation inspections and clean areas with unmanaged waste."
+    );
+  }
+
+  // Predicted cases comparison
+  if (Number(ward.cases) > averages.cases) {
+    signals.push("Above-average predicted cases");
+
+    actions.push(
+      "Strengthen local dengue surveillance and prepare healthcare response teams."
+    );
+  }
+
+  // Risk-tier recommendations
+  if (ward.tier === "Critical" || ward.tier === "High") {
+    actions.unshift(
+      "Give this ward priority for municipal inspection and vector-control planning."
+    );
+  } else if (ward.tier === "Medium") {
+    actions.unshift(
+      "Increase routine monitoring and address emerging risk indicators."
+    );
+  }
+
+  if (actions.length === 0) {
+    actions.push(
+      "Continue routine mosquito-control activities and weekly ward surveillance."
+    );
+  }
+
+  if (signals.length === 0) {
+    signals.push(
+      "No indicators above the city comparison thresholds."
+    );
+  }
+
+  return { signals, actions };
+};
+
 const RiskMap = ({ selectedCity }) => {
   const [wards, setWards] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -62,6 +149,7 @@ const RiskMap = ({ selectedCity }) => {
     (async () => {
       try {
         const res = await fetchWardsData();
+
         const list = (res.wards || []).filter(
           (w) => w.city === selectedCity
         );
@@ -77,6 +165,7 @@ const RiskMap = ({ selectedCity }) => {
         setWards(
           list.map((w, i) => {
             const p = results[i];
+
             const f2 = p?.forecasts?.find(
               (f) => f.horizon_weeks === 2
             );
@@ -87,20 +176,25 @@ const RiskMap = ({ selectedCity }) => {
               id: w.ward_id,
               tier,
               ...TIER_CONFIG[tier],
+
               rain: Number(
                 p?.weather?.rainfall_prev_2w_sum ??
                 p?.weather?.rainfall_mm ??
                 0
               ).toFixed(1),
+
               logging: Number(
                 w.water_logging_risk_index ?? 0.5
               ).toFixed(2),
+
               sanitation: Number(
                 w.sanitation_score ?? 0.5
               ).toFixed(2),
+
               pop: Number(
                 w.population_density_sqkm ?? 0
               ).toLocaleString(),
+
               cases: Math.round(
                 Number(
                   f2?.predicted_cases ?? p?.current_cases ?? 0
@@ -168,6 +262,9 @@ const RiskMap = ({ selectedCity }) => {
 
   const activeWard =
     wards.find((w) => w.id === selectedId) || wards[0];
+
+  // Generate the selected ward's action brief
+  const actionBrief = buildWardActionBrief(activeWard, wards);
 
   // Filter overflow data for the selected city
   const cityTransfers = (overflowData?.transfers || []).filter(
@@ -259,10 +356,14 @@ const RiskMap = ({ selectedCity }) => {
                       : ""
                   }`}
                 >
-                  <p className="text-xs font-bold truncate">{w.id}</p>
+                  <p className="text-xs font-bold truncate">
+                    {w.id}
+                  </p>
+
                   <p className="text-2xl font-extrabold mt-1">
                     {w.score}
                   </p>
+
                   <p className="text-[11px] opacity-90">
                     {w.tier} Risk
                   </p>
@@ -296,33 +397,113 @@ const RiskMap = ({ selectedCity }) => {
                 </div>
 
                 {[
-                  ["2-Wk Lagged Rainfall", `${activeWard.rain} mm`, "text-blue-600"],
-                  ["Water Logging Index", `${activeWard.logging} / 1.0`, "text-red-600"],
-                  ["Sanitation Score", `${activeWard.sanitation} / 1.0`, "text-gray-800"],
-                  ["Population Density", `${activeWard.pop} / sq.km`, "text-gray-800"],
-                  ["2-Wk Predicted Cases", `${activeWard.cases} cases/wk`, "text-amber-700"],
+                  [
+                    "2-Wk Lagged Rainfall",
+                    `${activeWard.rain} mm`,
+                    "text-blue-600",
+                  ],
+                  [
+                    "Water Logging Index",
+                    `${activeWard.logging} / 1.0`,
+                    "text-red-600",
+                  ],
+                  [
+                    "Sanitation Score",
+                    `${activeWard.sanitation} / 1.0`,
+                    "text-gray-800",
+                  ],
+                  [
+                    "Population Density",
+                    `${activeWard.pop} / sq.km`,
+                    "text-gray-800",
+                  ],
+                  [
+                    "2-Wk Predicted Cases",
+                    `${activeWard.cases} cases/wk`,
+                    "text-amber-700",
+                  ],
                 ].map(([label, val, color]) => (
                   <div
                     key={label}
                     className="flex justify-between p-2.5 bg-gray-50 rounded-lg text-sm"
                   >
-                    <span className="text-gray-600">{label}:</span>
-                    <span className={`font-bold ${color}`}>{val}</span>
+                    <span className="text-gray-600">
+                      {label}:
+                    </span>
+
+                    <span className={`font-bold ${color}`}>
+                      {val}
+                    </span>
                   </div>
                 ))}
               </div>
 
-              <div className="p-4 bg-red-50 border-l-4 border-red-600 rounded-r-lg text-xs text-red-700">
-                <p className="font-bold uppercase text-red-800">
-                  Municipal Action Priority
-                </p>
+              {/* NEW: Ward Action Brief */}
+              <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50 space-y-4">
 
-                <p className="mt-1">
-                  {activeWard.tier === "Critical" ||
-                  activeWard.tier === "High"
-                    ? `Priority vector control in ${activeWard.id}: Clear blocked drains (${activeWard.logging}) & deploy fogging.`
-                    : `Maintain routine weekly surveillance in ${activeWard.id}.`}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-extrabold uppercase tracking-wider text-indigo-800">
+                      Ward Action Brief
+                    </p>
+
+                    <p className="text-[11px] text-indigo-600 mt-1">
+                      Data-based municipal recommendations
+                    </p>
+                  </div>
+
+                  <span className="text-xl">📋</span>
+                </div>
+
+                {/* Identified Signals */}
+                <div>
+                  <p className="text-xs font-bold text-gray-800 mb-2">
+                    Identified Risk Signals
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {actionBrief?.signals.map((signal, index) => (
+                      <span
+                        key={index}
+                        className="px-2.5 py-1 rounded-full bg-white border border-indigo-200 text-[10px] font-semibold text-indigo-700"
+                      >
+                        {signal}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recommended Actions */}
+                <div>
+                  <p className="text-xs font-bold text-gray-800 mb-2">
+                    Recommended Actions
+                  </p>
+
+                  <div className="space-y-2">
+                    {actionBrief?.actions.map((action, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start gap-2 text-xs text-gray-700"
+                      >
+                        <span className="text-indigo-600 font-bold">
+                          {index + 1}.
+                        </span>
+
+                        <p>{action}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-indigo-200">
+                  <p className="text-[10px] text-gray-500 leading-relaxed">
+                    Recommendations are generated using comparisons
+                    with available ward-level data in {selectedCity}.
+                    These are decision-support suggestions, not
+                    official public-health instructions.
+                  </p>
+                </div>
+
               </div>
             </>
           ) : (
@@ -333,10 +514,9 @@ const RiskMap = ({ selectedCity }) => {
         </div>
       </div>
 
-      {/* NEW: Hospital Overflow Route Visualization */}
+      {/* Existing Hospital Overflow Route Visualization */}
       <section className="bg-white/95 rounded-xl border border-gray-200 shadow-sm overflow-hidden">
 
-        {/* Section Header */}
         <div className="p-5 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
 
           <div>
@@ -371,6 +551,7 @@ const RiskMap = ({ selectedCity }) => {
               <p className="font-bold text-sm">
                 Overflow routing unavailable
               </p>
+
               <p className="text-xs mt-1">
                 Unable to load the hospital transfer information.
                 Please check the backend connection.
@@ -385,9 +566,11 @@ const RiskMap = ({ selectedCity }) => {
                   <p className="text-xs text-gray-500">
                     Total Overflow
                   </p>
+
                   <p className="text-2xl font-extrabold text-gray-900 mt-1">
                     {formatNumber(citySummary?.overflow_patients)}
                   </p>
+
                   <p className="text-xs text-gray-500">
                     Patients requiring transfer
                   </p>
@@ -397,9 +580,11 @@ const RiskMap = ({ selectedCity }) => {
                   <p className="text-xs text-emerald-700">
                     Successfully Routed
                   </p>
+
                   <p className="text-2xl font-extrabold text-emerald-700 mt-1">
                     {formatNumber(citySummary?.routed_patients)}
                   </p>
+
                   <p className="text-xs text-emerald-700">
                     Patients transferred
                   </p>
@@ -409,9 +594,11 @@ const RiskMap = ({ selectedCity }) => {
                   <p className="text-xs text-red-700">
                     Unmet Deficit
                   </p>
+
                   <p className="text-2xl font-extrabold text-red-700 mt-1">
                     {formatNumber(citySummary?.unmet_patients)}
                   </p>
+
                   <p className="text-xs text-red-700">
                     Patients without local capacity
                   </p>
@@ -421,9 +608,11 @@ const RiskMap = ({ selectedCity }) => {
                   <p className="text-xs text-blue-700">
                     Receiving Wards
                   </p>
+
                   <p className="text-2xl font-extrabold text-blue-700 mt-1">
                     {receivingWards.length}
                   </p>
+
                   <p className="text-xs text-blue-700">
                     Wards accepting patients
                   </p>
@@ -462,6 +651,7 @@ const RiskMap = ({ selectedCity }) => {
                           <div className="p-3 rounded-lg bg-red-50 border border-red-200">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+
                               <span className="text-xs font-bold uppercase text-red-700">
                                 Sending Ward
                               </span>
@@ -501,6 +691,7 @@ const RiskMap = ({ selectedCity }) => {
                           <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                             <div className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+
                               <span className="text-xs font-bold uppercase text-emerald-700">
                                 Receiving Ward
                               </span>
@@ -529,6 +720,7 @@ const RiskMap = ({ selectedCity }) => {
                     <p className="text-emerald-700 font-bold">
                       No overflow transfers required
                     </p>
+
                     <p className="text-sm text-emerald-700 mt-1">
                       All wards in {selectedCity} are within their estimated
                       local bed capacity.
@@ -559,6 +751,7 @@ const RiskMap = ({ selectedCity }) => {
                           <p className="text-sm font-bold text-gray-900">
                             {ward.ward_id}
                           </p>
+
                           <p className="text-xs text-gray-500">
                             {formatNumber(ward.overflow_out)} patients routed
                             out of {formatNumber(ward.overflow)} overflow
