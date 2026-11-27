@@ -48,31 +48,50 @@ const Header = ({
     <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-slate-200/70 shadow-sm px-3 sm:px-6 py-3 transition-all">
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="shrink-0 flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-rose-950 hover:from-red-600 hover:to-rose-600 text-white font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg hover:shadow-red-600/25 active:scale-95 transition-all duration-200 cursor-pointer"
-          >
-            <span className="text-sm sm:text-base leading-none">☰</span>
-            <span className="whitespace-nowrap">Dengue Sense</span>
-          </button>
+         <button
+  type="button"
+  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+  className="group shrink-0 flex items-center gap-2.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-slate-900/90 backdrop-blur-md hover:bg-gradient-to-r hover:from-red-600 hover:to-rose-600 text-white font-bold text-xs sm:text-sm border border-slate-700/80 hover:border-rose-400/50 shadow-lg shadow-slate-900/20 hover:shadow-rose-600/30 active:scale-95 transition-all duration-200 cursor-pointer"
+>
+  <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-white/10 group-hover:bg-white/20 text-rose-400 group-hover:text-white transition-colors">
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h10M4 18h14" />
+    </svg>
+  </span>
+
+  <span className="whitespace-nowrap tracking-tight">
+    Dengue<span className="text-rose-400 group-hover:text-amber-200 transition-colors">Sense</span>
+  </span>
+</button>
 
           <div className="hidden sm:block h-8 w-px bg-slate-300/70" />
 
-          <div className="hidden sm:block">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                {greeting}
-              </h2>
-              <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100/90 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Live Surveillance
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Latest dengue vector &amp; outbreak telemetry
-            </p>
-          </div>
+          <div className="hidden sm:flex items-center gap-3 px-3.5 py-1.5 rounded-2xl bg-white/75 backdrop-blur-md border border-white/60 shadow-xs">
+  {/* Vertical Accent Bar */}
+  <div className="w-1 h-8 rounded-full bg-gradient-to-b from-red-600 to-rose-400" />
+
+  <div>
+    <div className="flex items-center gap-2">
+      <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-none">
+        {greeting}
+      </h2>
+      <span className="hidden md:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200/80">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+        Live Sync
+      </span>
+    </div>
+
+    <p className="text-[11px] text-slate-600 font-medium mt-1 leading-none">
+      Municipal dengue vector &amp; outbreak command
+    </p>
+  </div>
+</div>
         </div>
 
         <div className="group relative hidden sm:flex items-center bg-gradient-to-b from-white to-slate-50 hover:from-red-50/40 hover:to-white rounded-xl border border-slate-300/90 hover:border-red-400 focus-within:border-red-500 focus-within:ring-2 focus-within:ring-red-500/20 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200">
