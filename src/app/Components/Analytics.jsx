@@ -122,10 +122,10 @@ const Analytics = ({ selectedCity }) => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/95 backdrop-blur-sm p-6 rounded-xl border border-gray-200 shadow-sm space-y-5">
+      <div className="bg-white/95 backdrop-blur-sm p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-red-600">
                 Vector Breeding Clock Analysis
               </span>
@@ -139,7 +139,7 @@ const Analytics = ({ selectedCity }) => {
                 {isLiveApi ? "LIVE API" : "CONNECTING"}
               </span>
             </div>
-            <h2 className="text-xl font-bold text-gray-800">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-800 mt-0.5">
               Trend Analytics — {selectedCity}
               {activeWardLabel ? ` (${activeWardLabel})` : ""}
             </h2>
@@ -148,7 +148,7 @@ const Analytics = ({ selectedCity }) => {
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-semibold">
+          <div className="flex flex-wrap items-center gap-4 text-xs font-semibold shrink-0">
             <span className="flex items-center gap-1.5 text-blue-700">
               <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block"></span>
               Weekly Rainfall (mm)
@@ -165,58 +165,60 @@ const Analytics = ({ selectedCity }) => {
             Loading live telemetry trend data from ML API...
           </div>
         ) : trendData.length === 0 ? (
-          <div className="h-64 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-500">
+          <div className="h-64 flex items-center justify-center bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-500 px-4 text-center">
             No trend records available yet. Make sure Backend (Port 5000) &amp; Python ML API (Port 8000) are running.
           </div>
         ) : (
-          <div className="grid grid-cols-4 sm:grid-cols-8 gap-3 pt-4 pb-2 px-3 bg-slate-50 rounded-xl border border-slate-200 items-end h-64">
-            {trendData.map((item) => {
-              const rainHeight = Math.max(
-                12,
-                Math.round((item.rainfall / maxRain) * 140)
-              );
-              const caseHeight = Math.max(
-                12,
-                Math.round((item.cases / maxCases) * 140)
-              );
+          <div className="w-full overflow-x-auto pb-1">
+            <div className="min-w-[540px] grid grid-cols-8 gap-3 pt-4 pb-2 px-3 bg-slate-50 rounded-xl border border-slate-200 items-end h-64">
+              {trendData.map((item) => {
+                const rainHeight = Math.max(
+                  12,
+                  Math.round((item.rainfall / maxRain) * 140)
+                );
+                const caseHeight = Math.max(
+                  12,
+                  Math.round((item.cases / maxCases) * 140)
+                );
 
-              return (
-                <div key={item.week} className="flex flex-col items-center gap-2">
-                  <div className="flex items-end gap-1.5 h-40">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold text-blue-700 mb-1">
-                        {item.rainfall}
-                      </span>
-                      <div
-                        style={{ height: `${rainHeight}px` }}
-                        className="w-3.5 sm:w-4 bg-blue-500 rounded-t transition-all"
-                        title={`Rainfall: ${item.rainfall} mm`}
-                      />
+                return (
+                  <div key={item.week} className="flex flex-col items-center gap-2">
+                    <div className="flex items-end gap-1.5 h-40">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold text-blue-700 mb-1">
+                          {item.rainfall}
+                        </span>
+                        <div
+                          style={{ height: `${rainHeight}px` }}
+                          className="w-3.5 sm:w-4 bg-blue-500 rounded-t transition-all"
+                          title={`Rainfall: ${item.rainfall} mm`}
+                        />
+                      </div>
+
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold text-red-700 mb-1">
+                          {item.cases}
+                        </span>
+                        <div
+                          style={{ height: `${caseHeight}px` }}
+                          className="w-3.5 sm:w-4 bg-red-600 rounded-t transition-all"
+                          title={`Cases: ${item.cases}`}
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold text-red-700 mb-1">
-                        {item.cases}
-                      </span>
-                      <div
-                        style={{ height: `${caseHeight}px` }}
-                        className="w-3.5 sm:w-4 bg-red-600 rounded-t transition-all"
-                        title={`Cases: ${item.cases}`}
-                      />
-                    </div>
+                    <span className="text-xs font-semibold text-gray-700 border-t border-gray-200 pt-1 w-full text-center whitespace-nowrap">
+                      {item.week}
+                    </span>
                   </div>
-
-                  <span className="text-xs font-semibold text-gray-700 border-t border-gray-200 pt-1 w-full text-center">
-                    {item.week}
-                  </span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      <div className="bg-white/95 backdrop-blur-sm p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+      <div className="bg-white/95 backdrop-blur-sm p-4 sm:p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
             Zero Data-Leakage Chronological Validation

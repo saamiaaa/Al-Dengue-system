@@ -91,7 +91,7 @@ const Navbar = ({ children }) => {
 
       <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-8">
         {renderMainContent()}
-        {/* Only render Resource Dispatch Engine when Overview tab is active */}
+        
         {activeTab === "Overview" && children}
       </main>
     </div>
