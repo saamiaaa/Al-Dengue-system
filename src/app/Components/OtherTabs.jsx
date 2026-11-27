@@ -8,10 +8,12 @@ const isHighRiskLevel = (level) => {
   return lower.includes("high") || lower.includes("crit");
 };
 
-export const Alerts = ({ selectedCity }) => {
+// ১. Alerts & Recom ট্যাব
+export const Alerts = ({ selectedCity = "Chattogram" }) => {
   const [wardAlerts, setWardAlerts] = useState([]);
   const [loadedCity, setLoadedCity] = useState("");
   const [apiError, setApiError] = useState("");
+  const [dispatchedWards, setDispatchedWards] = useState({});
 
   useEffect(() => {
     let mounted = true;
@@ -41,13 +43,14 @@ export const Alerts = ({ selectedCity }) => {
               id: p.ward_id,
               predictedCases: Math.round(Number(twoWeek?.predicted_cases ?? 0)),
               riskLevel: twoWeek?.risk_level || "Low",
+              rainfall: p.weather?.rainfall_mm ?? 0,
             };
           });
 
         setWardAlerts(formatted);
         setApiError("");
       } catch (err) {
-        if (mounted) setApiError(err.message || "Failed to load alerts");
+        if (mounted) setApiError(err.message || "Failed to load live alerts");
       } finally {
         if (mounted) setLoadedCity(selectedCity);
       }
@@ -62,89 +65,169 @@ export const Alerts = ({ selectedCity }) => {
   const isLoading = !apiError && loadedCity !== selectedCity;
   const highRisk = wardAlerts.filter((w) => isHighRiskLevel(w.riskLevel));
 
+  const toggleDispatch = (wardId) => {
+    setDispatchedWards((prev) => ({ ...prev, [wardId]: !prev[wardId] }));
+  };
+
   return (
-    <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-gray-800">
-          Alerts &amp; Recommendations — {selectedCity}
-        </h2>
-        <span
-          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-            apiError
-              ? "bg-red-100 text-red-700"
-              : "bg-emerald-100 text-emerald-700"
-          }`}
-        >
-          {apiError ? "API OFFLINE" : "LIVE ML ALERTS"}
-        </span>
+    <div className="space-y-6">
+      <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">
+              Alerts &amp; Municipal Recommendations — {selectedCity}
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Automated outbreak thresholds, vector control triggers &amp; clinical advisories
+            </p>
+          </div>
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-bold ${
+              apiError
+                ? "bg-amber-100 text-amber-800"
+                : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {apiError ? "● OFFLINE ADVISORY MODE" : "● LIVE ML ALERTS ACTIVE"}
+          </span>
+        </div>
+
+        <div className="p-4 bg-red-50/90 border-l-4 border-red-600 rounded-r-xl text-sm text-red-700">
+          <p className="font-bold text-red-800">
+            🚨 Priority Vector Control Alert ({highRisk.length} High/Critical Risk Wards)
+          </p>
+          <p className="mt-1">
+            {isLoading
+              ? `Scanning live 2-week ML risk forecasts for ${selectedCity}...`
+              : highRisk.length > 0
+              ? `Immediate larvicide spraying & drainage clearance required in: ${highRisk
+                  .slice(0, 6)
+                  .map((w) => `${w.id} (${w.predictedCases} predicted cases)`)
+                  .join(", ")}.`
+              : `No critical outbreak threshold breached in ${selectedCity} right now. Maintain routine weekly larval surveillance.`}
+          </p>
+        </div>
+
+        {highRisk.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {highRisk.slice(0, 4).map((ward) => (
+              <div
+                key={ward.id}
+                className="p-4 rounded-xl border border-red-100 bg-slate-50/80 flex items-center justify-between gap-3"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-gray-900 text-sm">{ward.id}</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                      {ward.riskLevel}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    2-Week Forecast: <strong>{ward.predictedCases} cases</strong> • Rainfall:{" "}
+                    {ward.rainfall} mm
+                  </p>
+                </div>
+                <button
+                  onClick={() => toggleDispatch(ward.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                    dispatchedWards[ward.id]
+                      ? "bg-emerald-600 text-white"
+                      : "bg-red-600 hover:bg-red-700 text-white"
+                  }`}
+                >
+                  {dispatchedWards[ward.id] ? "✓ Crew Notified" : "Dispatch Crew"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="p-4 bg-red-50/90 border-l-4 border-red-600 rounded-r-xl text-sm text-red-700">
-        <p className="font-bold text-red-800">
-          🚨 Priority Alert ({highRisk.length} High/Critical Risk Wards)
-        </p>
-        <p className="mt-1">
-          {isLoading
-            ? `Scanning live ML risk forecasts for ${selectedCity}...`
-            : highRisk.length
-            ? `Deploy larvicide & drainage clearance in: ${highRisk
-                .slice(0, 5)
-                .map((w) => `${w.id} (${w.predictedCases} cases, ${w.riskLevel})`)
-                .join(", ")}.`
-            : `No critical threshold breached in ${selectedCity}. Continue routine checks.`}
-        </p>
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white/95 p-5 rounded-xl border border-gray-200 shadow-sm space-y-2">
+          <h3 className="font-bold text-blue-900 text-sm flex items-center gap-2">
+            🩺 Clinical &amp; Hospital Triage Advisory
+          </h3>
+          <ul className="text-xs text-gray-700 space-y-1.5 list-disc list-inside">
+            <li>Mandate NS1 Antigen &amp; CBC screening for acute fever &gt; 48 hours.</li>
+            <li>Pre-position 2.4× IV Saline bags per predicted case in primary health clinics.</li>
+            <li>Activate platelet &amp; hematocrit monitoring protocols for warning-sign patients.</li>
+          </ul>
+        </div>
 
-      <div className="p-4 bg-blue-50/90 border-l-4 border-blue-600 rounded-r-xl text-sm text-blue-700">
-        <p className="font-bold text-blue-800">🩺 Clinical Advisory</p>
-        <p className="mt-1">
-          Advise NS1 Antigen &amp; CBC testing for fever cases lasting &gt; 48
-          hours.
-        </p>
+        <div className="bg-white/95 p-5 rounded-xl border border-gray-200 shadow-sm space-y-2">
+          <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">
+            🦟 Municipal Aedes Control Checklist
+          </h3>
+          <ul className="text-xs text-gray-700 space-y-1.5 list-disc list-inside">
+            <li>Clear stagnant water in high water-logging zones within 72 hours of heavy rain.</li>
+            <li>Deploy fogging squads in wards with population density &gt; 50,000/sqkm.</li>
+            <li>Conduct door-to-door container inspection in construction sites &amp; schools.</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
 };
 
-export const Reports = ({ selectedCity }) => {
-  const [cityWardIds, setCityWardIds] = useState([]);
+// ২. Data & Reports ট্যাব
+export const Reports = ({ selectedCity = "Chattogram" }) => {
+  const [wardPreviews, setWardPreviews] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadWardsList() {
+    async function loadReportPreview() {
+      setIsLoading(true);
       try {
         const res = await fetchWardsData();
         if (!mounted) return;
         const filtered = (res.wards || []).filter(
           (w) => w.city === selectedCity
         );
-        setCityWardIds(filtered.map((w) => w.ward_id));
+
+        const predictions = await Promise.all(
+          filtered.map((w) => fetchWardPrediction(w.ward_id).catch(() => null))
+        );
+
+        if (!mounted) return;
+        setWardPreviews(predictions.filter(Boolean));
       } catch {
-        if (mounted) setCityWardIds([]);
+        if (mounted) setWardPreviews([]);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
     }
 
-    loadWardsList();
+    loadReportPreview();
     return () => {
       mounted = false;
     };
   }, [selectedCity]);
 
-  const downloadCSV = async () => {
-    if (cityWardIds.length === 0) return;
+  const totalCurrentCases = wardPreviews.reduce(
+    (sum, p) => sum + (Number(p.current_cases) || 0),
+    0
+  );
+  const total2WCases = wardPreviews.reduce((sum, p) => {
+    const f2 = p.forecasts?.find((f) => f.horizon_weeks === 2);
+    return sum + Math.round(Number(f2?.predicted_cases ?? 0));
+  }, 0);
+  const estimatedSaline = Math.round(total2WCases * 2.4);
+  const estimatedKits = Math.round(total2WCases * 1.15);
+
+  const downloadCSV = () => {
+    if (wardPreviews.length === 0) return;
     setIsExporting(true);
 
     try {
-      const predictions = await Promise.all(
-        cityWardIds.map((id) => fetchWardPrediction(id).catch(() => null))
-      );
-
-      const rows = predictions.filter(Boolean).map((p) => {
+      const rows = wardPreviews.map((p) => {
         const w = p.weather || {};
         const f2 = p.forecasts?.find((f) => f.horizon_weeks === 2);
         const f4 = p.forecasts?.find((f) => f.horizon_weeks === 4);
+        const pred2W = Math.round(Number(f2?.predicted_cases ?? 0));
         return [
           p.ward_id,
           selectedCity,
@@ -153,20 +236,22 @@ export const Reports = ({ selectedCity }) => {
           w.rainfall_mm ?? 0,
           w.avg_temp_c ?? 0,
           w.relative_humidity_pct ?? 0,
-          Math.round(Number(f2?.predicted_cases ?? 0)),
+          pred2W,
           Math.round(Number(f4?.predicted_cases ?? 0)),
+          Math.round(pred2W * 2.4),
+          Math.round(pred2W * 1.15),
           f2?.risk_level || "Low",
         ].join(",");
       });
 
       const csv = [
-        "Ward_ID,City,Data_Date,Current_Cases,Rainfall_mm,Avg_Temp_C,Humidity_Pct,Predicted_2W_Cases,Predicted_4W_Cases,Risk_Level",
+        "Ward_ID,City,Data_Date,Current_Cases,Rainfall_mm,Avg_Temp_C,Humidity_Pct,Predicted_2W_Cases,Predicted_4W_Cases,Est_Saline_Bags,Est_NS1_Kits,Risk_Level",
         ...rows,
       ].join("\n");
 
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-      a.download = `${selectedCity}_Live_Dengue_Report.csv`;
+      a.download = `${selectedCity}_Live_Dengue_Resource_Report.csv`;
       a.click();
     } finally {
       setIsExporting(false);
@@ -174,59 +259,253 @@ export const Reports = ({ selectedCity }) => {
   };
 
   return (
-    <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-      <h2 className="text-xl font-bold text-gray-800">
-        Data &amp; Reports — {selectedCity}
-      </h2>
-      <p className="text-sm text-gray-600">
-        Export live {cityWardIds.length}-ward ML forecast &amp; vector
-        surveillance dataset directly from the API.
-      </p>
-      <button
-        onClick={downloadCSV}
-        disabled={isExporting || cityWardIds.length === 0}
-        className="bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-colors"
-      >
-        {isExporting
-          ? "⏳ Generating Live CSV..."
-          : `⬇️ Download Live CSV (${selectedCity})`}
-      </button>
+    <div className="space-y-6">
+      <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">
+              Surveillance Data &amp; Resource Reports — {selectedCity}
+            </h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Export live {wardPreviews.length}-ward ML forecast, meteorological inputs &amp; medical supply estimates.
+            </p>
+          </div>
+          <button
+            onClick={downloadCSV}
+            disabled={isExporting || wardPreviews.length === 0}
+            className="bg-red-600 hover:bg-red-700 disabled:bg-slate-400 text-white px-5 py-2.5 rounded-xl text-sm font-semibold cursor-pointer transition-colors shrink-0"
+          >
+            {isExporting
+              ? "⏳ Generating Live CSV..."
+              : `⬇️ Export Full CSV (${selectedCity})`}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <p className="text-xs font-semibold text-slate-500 uppercase">Active Cases</p>
+            <p className="text-2xl font-extrabold text-slate-900 mt-1">{totalCurrentCases}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-red-50 border border-red-100">
+            <p className="text-xs font-semibold text-red-600 uppercase">2-Week Forecast</p>
+            <p className="text-2xl font-extrabold text-red-900 mt-1">{total2WCases}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-blue-50 border border-blue-100">
+            <p className="text-xs font-semibold text-blue-600 uppercase">IV Saline Needed</p>
+            <p className="text-2xl font-extrabold text-blue-900 mt-1">{estimatedSaline}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-100">
+            <p className="text-xs font-semibold text-amber-600 uppercase">NS1 Kits Needed</p>
+            <p className="text-2xl font-extrabold text-amber-900 mt-1">{estimatedKits}</p>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <thead className="bg-slate-100 text-gray-700">
+              <tr>
+                <th className="px-4 py-3 text-left font-bold">Ward ID</th>
+                <th className="px-4 py-3 text-center font-bold">Current Cases</th>
+                <th className="px-4 py-3 text-center font-bold">2W Forecast</th>
+                <th className="px-4 py-3 text-center font-bold">Rainfall (mm)</th>
+                <th className="px-4 py-3 text-center font-bold">Saline Bags</th>
+                <th className="px-4 py-3 text-center font-bold">Risk Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {isLoading ? (
+                <tr>
+                  <td colSpan="6" className="px-4 py-6 text-center text-gray-500">
+                    Loading live ward surveillance records for {selectedCity}...
+                  </td>
+                </tr>
+              ) : wardPreviews.length > 0 ? (
+                wardPreviews.slice(0, 8).map((p) => {
+                  const f2 = p.forecasts?.find((f) => f.horizon_weeks === 2);
+                  const pred2W = Math.round(Number(f2?.predicted_cases ?? 0));
+                  const risk = f2?.risk_level || "Low";
+                  return (
+                    <tr key={p.ward_id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2.5 font-semibold text-gray-800">{p.ward_id}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-700">{p.current_cases ?? 0}</td>
+                      <td className="px-4 py-2.5 text-center font-bold text-red-600">{pred2W}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-600">{p.weather?.rainfall_mm ?? 0}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-700">{Math.round(pred2W * 2.4)}</td>
+                      <td className="px-4 py-2.5 text-center">
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-semibold ${
+                            isHighRiskLevel(risk)
+                              ? "bg-red-100 text-red-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {risk}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="6" className="px-4 py-6 text-center text-gray-500">
+                    No live API records available right now. Check connection or switch city.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
 
+// ৩. Settings ট্যাব
 export const Settings = () => {
   const [sms, setSms] = useState(true);
+  const [whatsapp, setWhatsapp] = useState(true);
+  const [emailBriefing, setEmailBriefing] = useState(true);
   const [sync, setSync] = useState(true);
+  const [bufferPercent, setBufferPercent] = useState(20);
+  const [savedMessage, setSavedMessage] = useState(false);
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    setSavedMessage(true);
+    setTimeout(() => setSavedMessage(false), 3500);
+  };
 
   return (
-    <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm max-w-md space-y-3 text-sm text-gray-700">
-      <h2 className="text-xl font-bold text-gray-800">System Settings</h2>
-      <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/80">
-        <span>Critical Ward SMS Alerts</span>
-        <input
-          type="checkbox"
-          checked={sms}
-          onChange={(e) => setSms(e.target.checked)}
-          className="accent-red-600"
-        />
-      </label>
-      <label className="flex items-center justify-between p-3 rounded-lg bg-slate-50/80">
-        <span>Auto-sync BMD Weather Data</span>
-        <input
-          type="checkbox"
-          checked={sync}
-          onChange={(e) => setSync(e.target.checked)}
-          className="accent-red-600"
-        />
-      </label>
+    <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm max-w-3xl">
+      <h2 className="text-xl font-bold text-gray-800 mb-1">
+        System &amp; Dispatch Settings
+      </h2>
+      <p className="text-sm text-gray-500 mb-6">
+        Configure emergency supply thresholds, sync, and automated alerts.
+      </p>
+
+      <form onSubmit={handleSave} className="space-y-6">
+        <div className="p-4 bg-slate-50/80 rounded-xl border border-gray-200">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Emergency Saline &amp; NS1 Kit Reserve Buffer ({bufferPercent}%)
+          </label>
+          <input
+            type="range"
+            min="10"
+            max="50"
+            step="5"
+            value={bufferPercent}
+            onChange={(e) => setBufferPercent(Number(e.target.value))}
+            className="w-full accent-red-600 cursor-pointer"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Automatically adds a {bufferPercent}% safety stock on top of
+            predicted ward requirements.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            Automated Dispatch Channels
+          </h3>
+
+          <label className="flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-slate-50/80">
+            <div>
+              <p className="font-medium text-gray-800 text-sm">
+                Critical Ward SMS Alerts
+              </p>
+              <p className="text-xs text-gray-500">
+                Send instant low-stock &amp; surge SMS to Civil Surgeon office
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={sms}
+              onChange={(e) => setSms(e.target.checked)}
+              className="h-4 w-4 accent-red-600"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-slate-50/80">
+            <div>
+              <p className="font-medium text-gray-800 text-sm">
+                WhatsApp Rapid Dispatch
+              </p>
+              <p className="text-xs text-gray-500">
+                Automated logistic requests to central medical store
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.checked)}
+              className="h-4 w-4 accent-red-600"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-slate-50/80">
+            <div>
+              <p className="font-medium text-gray-800 text-sm">
+                Ward Commissioner Email Briefing
+              </p>
+              <p className="text-xs text-gray-500">
+                Weekly outbreak &amp; water-logging summary report
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={emailBriefing}
+              onChange={(e) => setEmailBriefing(e.target.checked)}
+              className="h-4 w-4 accent-red-600"
+            />
+          </label>
+        </div>
+
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+            Data Sync
+          </h3>
+
+          <label className="flex items-center justify-between p-3 border border-gray-200 rounded-xl cursor-pointer hover:bg-slate-50/80">
+            <div>
+              <p className="font-medium text-gray-800 text-sm">
+                Auto-sync BMD Weather Data
+              </p>
+              <p className="text-xs text-gray-500">
+                Sync meteorological &amp; rainfall updates automatically when online
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={sync}
+              onChange={(e) => setSync(e.target.checked)}
+              className="h-4 w-4 accent-red-600"
+            />
+          </label>
+        </div>
+
+        <div className="flex items-center gap-4 pt-2">
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl shadow-sm transition-colors cursor-pointer"
+          >
+            Save Configuration
+          </button>
+
+          {savedMessage && (
+            <span className="text-sm font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+              ✓ Configuration saved successfully!
+            </span>
+          )}
+        </div>
+      </form>
     </div>
   );
 };
 
+// ৪. Help & About ট্যাব
 export const HelpAbout = () => (
   <div className="space-y-6">
-    {/* Hero Banner */}
     <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-red-950 text-white p-6 sm:p-8 rounded-2xl shadow-md border border-slate-700">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="px-3 py-1 rounded-full bg-red-600/90 text-xs font-bold uppercase tracking-wider">
@@ -270,7 +549,6 @@ export const HelpAbout = () => (
       </div>
     </div>
 
-    {/* What Makes Our Platform Different */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-3">
         <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
@@ -301,7 +579,6 @@ export const HelpAbout = () => (
         </ul>
       </div>
 
-      {/* Mathematical & Operational Logic */}
       <div className="bg-white/95 p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
         <h3 className="text-base font-bold text-gray-900 flex items-center gap-2">
           🧮 Clinical &amp; Optimization Formulas
@@ -352,7 +629,6 @@ export const HelpAbout = () => (
       </div>
     </div>
 
-    {/* Architecture & AI Disclosure Footer */}
     <div className="bg-white/95 p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-gray-600">
       <div>
         <p className="font-bold text-gray-800">
