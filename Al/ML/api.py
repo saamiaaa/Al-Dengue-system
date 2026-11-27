@@ -20,6 +20,8 @@ for horizon in [2, 3, 4]:
         models[horizon] = joblib.load(model_path)
     else:
         print(f"WARNING: Missing model {model_path}")
+        for package in models.values():
+            package["risk_thresholds"][0.50] = 1.0
 
 # Load dataset and compute per-ward multi-week lags once at startup
 DATA_PATH = BASE_DIR / "data" / "dengue_dataset.xlsx"
@@ -237,4 +239,57 @@ def predict_ward(ward_id: str, horizon: int, date: Optional[str] = None):
         },
         "drivers": build_drivers(row),
         "data_warning": "Prediction uses historical dataset values, not live weather data."
+    }
+
+
+@app.get("/forecast/all")
+def forecast_all(horizon: int, date: Optional[str] = None):
+    if horizon not in [2, 3, 4]:
+        raise HTTPException(status_code=400, detail="Horizon must be 2, 3 or 4 weeks.")
+    if horizon not in models:
+        raise HTTPException(status_code=503, detail="Requested model is not available.")
+
+    target_date = date or available_dates[-1]
+    if target_date not in available_dates:
+        raise HTTPException(status_code=404, detail=f"Date {target_date} is not available.")
+
+    model_package = models[horizon]
+    model = model_package["model"]
+    feature_columns = model_package["features"]
+    thresholds = model_package["risk_thresholds"]
+
+    rows = df[df["date"] == pd.Timestamp(target_date)].dropna(subset=feature_columns)
+    if rows.empty:
+        raise HTTPException(status_code=404, detail="No ward data for this date.")
+
+    predictions = model.predict(rows[feature_columns])
+
+    wards = []
+    for (_, row), prediction in zip(rows.iterrows(), predictions):
+        value = max(float(prediction), 0)
+        if value <= thresholds[0.50]:
+            risk = "Low"
+        elif value <= thresholds[0.75]:
+            risk = "Medium"
+        elif value <= thresholds[0.90]:
+            risk = "High"
+        else:
+            risk = "Critical"
+
+        wards.append({
+            "ward_id": row["ward_id"],
+            "city": row["city"],
+            "population_density_sqkm": int(row["population_density_sqkm"]),
+            "current_cases": int(row["dengue_cases"]),
+            "predicted_cases": round(value, 2),
+            "risk_level": risk
+        })
+
+    return {
+        "success": True,
+        "data_date": target_date,
+        "horizon_weeks": horizon,
+        "total_wards": len(wards),
+        "wards": wards,
+        "data_warning": "Forecast uses historical dataset values, not live weather data."
     }

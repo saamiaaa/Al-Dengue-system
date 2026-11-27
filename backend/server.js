@@ -187,6 +187,180 @@ app.post("/api/predict/:horizon", async (req, res) => {
     }
 });
 
+
+
+
+const SUPPLY_RATES = {
+    saline_bags_needed: 2.38,
+    diagnostic_kits_needed: 1.16,
+    hospital_beds_required: 0.29
+};
+const SUPPLY_LABELS = {
+    saline_bags_needed: "saline bags",
+    diagnostic_kits_needed: "diagnostic kits",
+    hospital_beds_required: "hospital beds"
+};
+const SUPPLY_KEYS = Object.keys(SUPPLY_RATES);
+const CREWS_PER_RISK = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+const RISK_RANK = { Critical: 4, High: 3, Medium: 2, Low: 1 };
+
+function emptyTotals() {
+    const totals = {};
+    SUPPLY_KEYS.forEach((key) => { totals[key] = 0; });
+    return totals;
+}
+
+function buildAllocation(forecastWards, stockPct, totalCrews) {
+    const wards = forecastWards.map((w) => {
+        const required = {};
+        SUPPLY_KEYS.forEach((key) => {
+            required[key] = Math.round(SUPPLY_RATES[key] * w.predicted_cases);
+        });
+        return {
+            ward_id: w.ward_id,
+            city: w.city,
+            population_density_sqkm: w.population_density_sqkm,
+            current_cases: w.current_cases,
+            predicted_cases: w.predicted_cases,
+            risk_level: w.risk_level,
+            required,
+            allocated: emptyTotals(),
+            deficit: emptyTotals()
+        };
+    });
+
+    wards.sort((a, b) =>
+        RISK_RANK[b.risk_level] - RISK_RANK[a.risk_level] ||
+        b.population_density_sqkm - a.population_density_sqkm ||
+        b.predicted_cases - a.predicted_cases ||
+        a.ward_id.localeCompare(b.ward_id)
+    );
+
+    const totals = {
+        required: emptyTotals(),
+        available: emptyTotals(),
+        allocated: emptyTotals(),
+        deficit: emptyTotals()
+    };
+    wards.forEach((w) => {
+        SUPPLY_KEYS.forEach((key) => { totals.required[key] += w.required[key]; });
+    });
+
+    SUPPLY_KEYS.forEach((key) => {
+        totals.available[key] = Math.floor((totals.required[key] * stockPct) / 100);
+        let remaining = totals.available[key];
+        wards.forEach((w) => {
+            const give = Math.min(w.required[key], remaining);
+            w.allocated[key] = give;
+            w.deficit[key] = w.required[key] - give;
+            remaining -= give;
+            totals.allocated[key] += give;
+            totals.deficit[key] += w.deficit[key];
+        });
+    });
+
+    let crewsLeft = totalCrews;
+    let crewsNeededTotal = 0;
+    let crewsAssignedTotal = 0;
+    let wardsWithDeficit = 0;
+
+    wards.forEach((w, index) => {
+        w.rank = index + 1;
+
+        const shares = SUPPLY_KEYS
+            .filter((key) => w.required[key] > 0)
+            .map((key) => w.allocated[key] / w.required[key]);
+        w.fulfilment_pct = shares.length ? Math.floor(Math.min(...shares) * 100) : 100;
+
+        const shortfalls = SUPPLY_KEYS
+            .filter((key) => w.deficit[key] > 0)
+            .map((key) => `${SUPPLY_LABELS[key]} short by ${w.deficit[key]} (needs ${w.required[key]}, gets ${w.allocated[key]})`);
+        w.deficit_alert = shortfalls.length > 0;
+        w.alert_message = w.deficit_alert ? `CRITICAL SUPPLY DEFICIT: ${shortfalls.join("; ")}` : null;
+        if (w.deficit_alert) wardsWithDeficit += 1;
+
+        w.crews_needed = CREWS_PER_RISK[w.risk_level];
+        w.crews_assigned = Math.min(w.crews_needed, crewsLeft);
+        w.crew_deficit = w.crews_needed - w.crews_assigned;
+        crewsLeft -= w.crews_assigned;
+        crewsNeededTotal += w.crews_needed;
+        crewsAssignedTotal += w.crews_assigned;
+    });
+
+    const warnings = [];
+    if (wardsWithDeficit > 0) {
+        warnings.push(`CRITICAL SUPPLY DEFICIT: ${wardsWithDeficit} of ${wards.length} wards cannot be fully supplied at ${stockPct}% stock.`);
+    }
+    if (crewsNeededTotal > totalCrews) {
+        warnings.push(`CREW SHORTAGE: ${crewsNeededTotal} crews needed but only ${totalCrews} available.`);
+    }
+
+    return {
+        summary: {
+            stock_pct: stockPct,
+            total_crews: totalCrews,
+            crews_needed: crewsNeededTotal,
+            crews_assigned: crewsAssignedTotal,
+            wards_total: wards.length,
+            wards_with_deficit: wardsWithDeficit,
+            totals,
+            warnings
+        },
+        wards
+    };
+}
+
+app.get("/api/allocation", async (req, res) => {
+    const horizon = Number(req.query.horizon || 2);
+    const stockPct = Number(req.query.stock === undefined ? 100 : req.query.stock);
+    const totalCrews = Number(req.query.crews === undefined ? 20 : req.query.crews);
+    const date = req.query.date ? String(req.query.date) : "";
+
+    if (!HORIZONS.includes(horizon)) {
+        return res.status(400).json({ success: false, error: "Horizon must be 2, 3 or 4 weeks." });
+    }
+    if (!Number.isFinite(stockPct) || stockPct < 30 || stockPct > 100) {
+        return res.status(400).json({ success: false, error: "stock must be between 30 and 100" });
+    }
+    if (!Number.isInteger(totalCrews) || totalCrews < 0 || totalCrews > 1000) {
+        return res.status(400).json({ success: false, error: "crews must be a whole number from 0 to 1000" });
+    }
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, error: "Date must be YYYY-MM-DD" });
+    }
+
+    const qs = date ? `&date=${encodeURIComponent(date)}` : "";
+
+    try {
+        const forecast = await cachedCall(
+            `forecast|${horizon}|${date || "latest"}`,
+            `/forecast/all?horizon=${horizon}${qs}`
+        );
+        if (forecast.status !== 200) {
+            return res.status(forecast.status).json(errorBody(forecast));
+        }
+
+        const allocation = buildAllocation(forecast.data.wards, stockPct, totalCrews);
+        res.json({
+            success: true,
+            cached: forecast.cached,
+            data_date: forecast.data.data_date,
+            horizon_weeks: horizon,
+            assumptions: {
+                supply_rates_per_case: SUPPLY_RATES,
+                crews_per_risk_level: CREWS_PER_RISK,
+                stock_definition: "100% stock equals the full projected demand of all wards",
+                priority_rule: "risk level first, then population density, then predicted cases"
+            },
+            ...allocation
+        });
+    } catch (_) {
+        mlDown(res);
+    }
+});
+
+
+
 app.use((err, req, res, next) => {
     res.status(400).json({ success: false, error: "Invalid request" });
 });
