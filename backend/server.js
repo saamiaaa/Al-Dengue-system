@@ -361,6 +361,144 @@ app.get("/api/allocation", async (req, res) => {
 
 
 
+
+// Overflow routing engine module-2
+function buildOverflowRouting(wardsInPriorityOrder, capacityMap) {
+    const wards = wardsInPriorityOrder.map((w) => ({
+        ward_id: w.ward_id,
+        city: w.city,
+        risk_level: w.risk_level,
+        priority_rank: w.rank,
+        predicted_cases: w.predicted_cases,
+        bed_capacity: capacityMap[w.ward_id] || 1,
+        bed_demand: w.required.hospital_beds_required,
+        overflow: 0,
+        overflow_out: 0,
+        received_in: 0
+    }));
+    wards.forEach((w) => {
+        w.overflow = Math.max(0, w.bed_demand - w.bed_capacity);
+    });
+
+    const byCity = {};
+    wards.forEach((w) => {
+        if (!byCity[w.city]) byCity[w.city] = [];
+        byCity[w.city].push(w);
+    });
+
+    const transferMap = {};
+    Object.keys(byCity).forEach((city) => {
+        const pool = byCity[city];
+        pool.filter((w) => w.overflow > 0).forEach((donor) => {
+            let toPlace = donor.overflow;
+            while (toPlace > 0) {
+                const receivers = pool.filter(
+                    (w) => w.overflow === 0 && w.bed_demand + w.received_in < w.bed_capacity
+                );
+                if (receivers.length === 0) break;
+                receivers.sort((a, b) =>
+                    (a.bed_demand + a.received_in) / a.bed_capacity -
+                    (b.bed_demand + b.received_in) / b.bed_capacity ||
+                    a.ward_id.localeCompare(b.ward_id)
+                );
+                const target = receivers[0];
+                target.received_in += 1;
+                donor.overflow_out += 1;
+                toPlace -= 1;
+
+                const key = `${donor.ward_id}>${target.ward_id}`;
+                if (!transferMap[key]) {
+                    transferMap[key] = { city, from_ward: donor.ward_id, to_ward: target.ward_id, patients: 0 };
+                }
+                transferMap[key].patients += 1;
+            }
+        });
+    });
+
+    wards.forEach((w) => {
+        w.net_deficit = w.overflow - w.overflow_out;
+        w.bed_load_after = w.bed_demand - w.overflow_out + w.received_in;
+        w.utilization_before_pct = Math.round((w.bed_demand / w.bed_capacity) * 100);
+        w.utilization_after_pct = Math.round((w.bed_load_after / w.bed_capacity) * 100);
+        w.headroom_after = Math.max(0, w.bed_capacity - w.bed_load_after);
+        if (w.net_deficit > 0) w.status = "UNMET BED DEFICIT";
+        else if (w.overflow > 0) w.status = "Overflow routed out";
+        else if (w.received_in > 0) w.status = "Receiving overflow";
+        else w.status = "Within capacity";
+    });
+
+    const cities = Object.keys(byCity).sort().map((city) => {
+        const pool = byCity[city];
+        const sum = (field) => pool.reduce((total, w) => total + w[field], 0);
+        const overflowTotal = sum("overflow");
+        const routedTotal = sum("overflow_out");
+        const unmet = overflowTotal - routedTotal;
+        let status = "Within capacity";
+        if (unmet > 0) status = "CITY OVER CAPACITY";
+        else if (overflowTotal > 0) status = "Surge routed within city";
+        return {
+            city,
+            wards: pool.length,
+            total_capacity: sum("bed_capacity"),
+            total_demand: sum("bed_demand"),
+            utilization_pct: Math.round((sum("bed_demand") / sum("bed_capacity")) * 100),
+            overflow_patients: overflowTotal,
+            routed_patients: routedTotal,
+            unmet_patients: unmet,
+            headroom_after: sum("headroom_after"),
+            status
+        };
+    });
+
+    const transfers = Object.values(transferMap).sort(
+        (a, b) => a.city.localeCompare(b.city) || b.patients - a.patients
+    );
+
+    return { cities, wards, transfers };
+}
+
+app.get("/api/overflow", async (req, res) => {
+    const horizon = Number(req.query.horizon || 2);
+    const date = req.query.date ? String(req.query.date) : "";
+
+    if (!HORIZONS.includes(horizon)) {
+        return res.status(400).json({ success: false, error: "Horizon must be 2, 3 or 4 weeks." });
+    }
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, error: "Date must be YYYY-MM-DD" });
+    }
+
+    const qs = date ? `&date=${encodeURIComponent(date)}` : "";
+
+    try {
+        const [forecast, capacity] = await Promise.all([
+            cachedCall(`forecast|${horizon}|${date || "latest"}`, `/forecast/all?horizon=${horizon}${qs}`),
+            cachedCall("capacity", "/capacity")
+        ]);
+        if (forecast.status !== 200) return res.status(forecast.status).json(errorBody(forecast));
+        if (capacity.status !== 200) return res.status(capacity.status).json(errorBody(capacity));
+
+        const ordered = buildAllocation(forecast.data.wards, 100, 0).wards;
+        const routing = buildOverflowRouting(ordered, capacity.data.capacity);
+
+        res.json({
+            success: true,
+            cached: forecast.cached,
+            data_date: forecast.data.data_date,
+            horizon_weeks: horizon,
+            assumptions: {
+                bed_capacity_rule: capacity.data.rule,
+                bed_demand_rule: "predicted cases x 0.29, rounded (measured from the dataset)",
+                routing_rule: "overflow goes only to wards of the same city, each patient to the least-full ward with a free bed; donors are served in the same priority order as the allocation engine"
+            },
+            ...routing
+        });
+    } catch (_) {
+        mlDown(res);
+    }
+});
+
+
 app.use((err, req, res, next) => {
     res.status(400).json({ success: false, error: "Invalid request" });
 });

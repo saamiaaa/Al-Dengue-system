@@ -12,6 +12,7 @@ app = FastAPI(
 
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
+DATA_DIR = BASE_DIR / "data"
 
 models = {}
 for horizon in [2, 3, 4]:
@@ -20,14 +21,24 @@ for horizon in [2, 3, 4]:
         models[horizon] = joblib.load(model_path)
     else:
         print(f"WARNING: Missing model {model_path}")
-        for package in models.values():
-            package["risk_thresholds"][0.50] = 1.0
 
-# Load dataset and compute per-ward multi-week lags once at startup
-DATA_PATH = BASE_DIR / "data" / "dengue_dataset.xlsx"
-df = pd.read_excel(DATA_PATH)
+for package in models.values():
+    package["risk_thresholds"][0.50] = 1.0
+
+candidate_files = [
+    DATA_DIR / "dengue_dataset_final.xlsx",
+    DATA_DIR / "bangladesh_dengue_large_dataset_onsite.xlsx",
+    DATA_DIR / "dengue_dataset.xlsx",
+]
+DATA_PATH = next((p for p in candidate_files if p.exists()), candidate_files[-1])
+print("Loading dataset from:", DATA_PATH.name)
+
+df = pd.read_excel(DATA_PATH) if DATA_PATH.suffix == ".xlsx" else pd.read_csv(DATA_PATH)
 df["date"] = pd.to_datetime(df["date"])
 df = df.sort_values(["ward_id", "date"]).copy()
+
+if "hospital_beds_required" not in df.columns:
+    df["hospital_beds_required"] = (df["dengue_cases"] * 0.29).round().astype(int)
 
 for i in range(1, 5):
     df[f"rainfall_lag_{i}"] = df.groupby("ward_id")["rainfall_mm"].shift(i)
@@ -44,9 +55,21 @@ df["humidity_lag_1"] = df.groupby("ward_id")["relative_humidity_pct"].shift(1)
 for i in range(1, 5):
     df[f"dengue_cases_lag_{i}"] = df.groupby("ward_id")["dengue_cases"].shift(i)
 
-# Last 52 selectable dates (skips first 4 weeks so lag values are always complete)
 all_dates = sorted(df["date"].dt.strftime("%Y-%m-%d").unique())[4:]
 available_dates = all_dates[-52:]
+
+ward_meta = (
+    df[["ward_id", "population_density_sqkm", "sanitation_score"]]
+    .drop_duplicates("ward_id")
+)
+
+bed_capacity = {
+    row["ward_id"]: max(
+        1,
+        round((float(row["population_density_sqkm"]) / 25000.0) + (float(row["sanitation_score"]) * 3.0))
+    )
+    for _, row in ward_meta.iterrows()
+}
 
 print("Dataset loaded and features prepared!")
 print("Available wards:", df["ward_id"].nunique())
@@ -127,7 +150,7 @@ def get_wards():
     )
     return {
         "total_wards": len(wards),
-        "latest_date": available_dates[-1],
+        "latest_date": available_dates[-1] if available_dates else None,
         "available_dates": available_dates,
         "wards": wards
     }
@@ -156,11 +179,11 @@ def predict_dengue(horizon: int, features: dict):
         input_data = pd.DataFrame([{col: features[col] for col in feature_columns}])
         prediction = max(float(model.predict(input_data)[0]), 0)
 
-        if prediction <= thresholds[0.50]:
+        if prediction < thresholds[0.50]:
             risk = "Low"
-        elif prediction <= thresholds[0.75]:
+        elif prediction < thresholds[0.75]:
             risk = "Medium"
-        elif prediction <= thresholds[0.90]:
+        elif prediction < thresholds[0.90]:
             risk = "High"
         else:
             risk = "Critical"
@@ -209,11 +232,11 @@ def predict_ward(ward_id: str, horizon: int, date: Optional[str] = None):
     input_data = pd.DataFrame([{col: row[col] for col in feature_columns}])
     prediction = max(float(model.predict(input_data)[0]), 0)
 
-    if prediction <= thresholds[0.50]:
+    if prediction < thresholds[0.50]:
         risk = "Low"
-    elif prediction <= thresholds[0.75]:
+    elif prediction < thresholds[0.75]:
         risk = "Medium"
-    elif prediction <= thresholds[0.90]:
+    elif prediction < thresholds[0.90]:
         risk = "High"
     else:
         risk = "Critical"
@@ -267,11 +290,11 @@ def forecast_all(horizon: int, date: Optional[str] = None):
     wards = []
     for (_, row), prediction in zip(rows.iterrows(), predictions):
         value = max(float(prediction), 0)
-        if value <= thresholds[0.50]:
+        if value < thresholds[0.50]:
             risk = "Low"
-        elif value <= thresholds[0.75]:
+        elif value < thresholds[0.75]:
             risk = "Medium"
-        elif value <= thresholds[0.90]:
+        elif value < thresholds[0.90]:
             risk = "High"
         else:
             risk = "Critical"
@@ -292,4 +315,13 @@ def forecast_all(horizon: int, date: Optional[str] = None):
         "total_wards": len(wards),
         "wards": wards,
         "data_warning": "Forecast uses historical dataset values, not live weather data."
+    }
+
+
+@app.get("/capacity")
+def get_capacity():
+    return {
+        "success": True,
+        "rule": "Assumed bed capacity per ward = round((population_density_sqkm / 25,000) + (sanitation_score * 3)), minimum 1 bed (documented operational assumption; dataset has no bed capacity column)",
+        "capacity": bed_capacity
     }
