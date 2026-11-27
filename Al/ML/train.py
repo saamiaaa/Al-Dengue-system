@@ -169,16 +169,28 @@ for horizon in [2, 3, 4]:
     )
 
  # Random Forest model
-    model = Pipeline([
-        ("preprocessor", preprocessor),
-        ("regressor", RandomForestRegressor(
-            n_estimators=200,
-            min_samples_leaf=2,
-            random_state=42,
-            n_jobs=-1
-        ))
-    ])
+    # model = Pipeline([
+    #     ("preprocessor", preprocessor),
+    #     ("regressor", RandomForestRegressor(
+    #         n_estimators=200,
+    #         min_samples_leaf=2,
+    #         random_state=42,
+    #         n_jobs=-1
+    #     ))
+    # ])
 
+    model = Pipeline([
+    ("preprocessor", preprocessor),
+    ("regressor", RandomForestRegressor(
+        n_estimators=200,
+        max_depth=16,
+        min_samples_leaf=3,
+        random_state=42,
+        n_jobs=-1
+    ))
+])
+    # model_path = MODEL_DIR / f"dengue_model_{horizon}w.joblib"
+    # joblib.dump(model_package, model_path, compress=3)
     baseline = DummyRegressor(strategy="mean")
     baseline.fit(X_train[numeric_features], y_train)
 
@@ -243,8 +255,7 @@ for horizon in [2, 3, 4]:
     }
 
     model_path = MODEL_DIR / f"dengue_model_{horizon}w.joblib"
-
-    joblib.dump(model_package, model_path)
+    joblib.dump(model_package, model_path, compress=3)
 
     print("\nMODEL SAVED:", model_path)
 
