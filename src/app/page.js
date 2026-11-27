@@ -213,447 +213,516 @@ export default function Home() {
               onResetDefaults={handleResetDefaults}
             />
 
-            <div className="flex-1 p-6 lg:p-8 overflow-y-auto">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">
-                    Urban Dengue Outbreak &amp; Resource Dispatch System
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    2-to-4-Week Random Forest Forecast, Scarcity Optimization &amp; Intra-City Surge Routing
-                  </p>
-                </div>
+            <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto space-y-6">
+  {/* Dark Cyber-Glass Command Header */}
+  <div className="relative overflow-hidden rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-white/15 p-5 sm:p-6 text-white shadow-[0_20px_50px_-15px_rgba(15,23,42,0.7)]">
+    <div className="pointer-events-none absolute -top-20 -right-20 h-48 w-48 rounded-full bg-rose-600/20 blur-3xl" />
+    <div className="pointer-events-none absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-sky-500/15 blur-3xl" />
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    aria-label="Forecast Horizon"
-                    value={horizon}
-                    onChange={(e) => setHorizon(Number(e.target.value))}
-                    className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-800 cursor-pointer"
-                  >
-                    <option value={2}>+2 Weeks Horizon</option>
-                    <option value={3}>+3 Weeks Horizon</option>
-                    <option value={4}>+4 Weeks Horizon</option>
-                  </select>
+    <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase tracking-widest bg-rose-500/15 text-rose-300 border border-rose-400/30 mb-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-ping" />
+          Resource Optimization &amp; Surge Routing Engine
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+          Urban Dengue Outbreak &amp;{" "}
+          <span className="bg-gradient-to-r from-rose-400 to-amber-300 bg-clip-text text-transparent">
+            Resource Dispatch System
+          </span>
+        </h2>
+        <p className="text-xs text-slate-300 mt-1">
+          2-to-4-Week Random Forest Forecast, Scarcity Optimization &amp; Intra-City Surge Routing
+        </p>
+      </div>
 
-                  <select
-                    aria-label="Forecast Date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-300 bg-white text-slate-800 cursor-pointer"
-                  >
-                    {availableDates.slice(-24).map((d) => (
-                      <option key={d} value={d}>
-                        Date: {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {/* Modern Dark Control Pills */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <select
+          aria-label="Forecast Horizon"
+          value={horizon}
+          onChange={(e) => setHorizon(Number(e.target.value))}
+          className="px-3.5 py-2 text-xs font-bold rounded-xl border border-white/20 bg-white/10 hover:bg-white/15 text-white backdrop-blur-md focus:outline-none focus:border-rose-400 cursor-pointer transition"
+        >
+          <option value={2} className="bg-slate-900 text-white">+2 Weeks Horizon</option>
+          <option value={3} className="bg-slate-900 text-white">+3 Weeks Horizon</option>
+          <option value={4} className="bg-slate-900 text-white">+4 Weeks Horizon</option>
+        </select>
+
+        <select
+          aria-label="Forecast Date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="px-3.5 py-2 font-mono text-xs font-bold rounded-xl border border-white/20 bg-white/10 hover:bg-white/15 text-white backdrop-blur-md focus:outline-none focus:border-rose-400 cursor-pointer transition"
+        >
+          {availableDates.slice(-24).map((d) => (
+            <option key={d} value={d} className="bg-slate-900 text-white">
+              Date: {d}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {/* Critical Warnings Alert Banner */}
+  {(allocationRes?.summary?.warnings || []).length > 0 && (
+    <div className="p-4 rounded-2xl bg-red-950/90 backdrop-blur-md border border-red-500/40 text-xs font-bold text-red-200 shadow-lg space-y-1.5">
+      {allocationRes.summary.warnings.map((w, idx) => (
+        <div key={idx} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-red-500 animate-ping shrink-0" />
+          <span>{w}</span>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {/* 4 Modern Telemetry KPI Cards */}
+  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="group relative overflow-hidden bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-500 to-amber-400" />
+      <p className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+        Projected Cases (+{horizon}W)
+      </p>
+      <p className="text-3xl font-black text-slate-900 mt-1.5 tracking-tight">
+        {totalCases.toFixed(1)}
+      </p>
+      <p className="text-xs font-semibold text-rose-600 mt-1.5">
+        Across {visibleWards.length} active wards
+      </p>
+    </div>
+
+    <div className="group relative overflow-hidden bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-400" />
+      <div className="flex justify-between items-start">
+        <p className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          Saline Allocation
+        </p>
+        <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+          <Droplets className="w-4 h-4" />
+        </span>
+      </div>
+      <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">
+        {totalSalineAlloc.toLocaleString()}{" "}
+        <span className="text-sm font-semibold text-slate-400">
+          / {totalSalineReq.toLocaleString()}
+        </span>
+      </p>
+      <p className="text-xs font-semibold text-blue-600 mt-1.5">
+        Regional stock at {stockPercentage}%
+      </p>
+    </div>
+
+    <div className="group relative overflow-hidden bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-600 to-rose-500" />
+      <div className="flex justify-between items-start">
+        <p className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          Critical Deficit Wards
+        </p>
+        <span className="p-1.5 rounded-lg bg-red-50 text-red-600">
+          <AlertTriangle className="w-4 h-4" />
+        </span>
+      </div>
+      <p className="text-3xl font-black text-red-600 mt-1 tracking-tight">
+        {deficitWardCount}
+      </p>
+      <p className="text-xs font-medium text-slate-600 mt-1.5">
+        {supplyDeficitCount} supply deficit • {crewDeficitCount} crew short
+      </p>
+    </div>
+
+    <div className="group relative overflow-hidden bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-amber-500 to-orange-400" />
+      <div className="flex justify-between items-start">
+        <p className="font-mono text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+          Overflow Transfers
+        </p>
+        <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600">
+          <ArrowRightLeft className="w-4 h-4" />
+        </span>
+      </div>
+      <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">
+        {totalRoutedPatients}{" "}
+        <span className="text-base font-bold text-slate-600">Patients</span>
+      </p>
+      <p className="text-xs font-medium text-slate-600 mt-1.5">
+        Intra-city bed balancing
+      </p>
+    </div>
+  </div>
+
+  {/* Modern Segmented Pill Navigation Tabs */}
+  <div className="inline-flex flex-wrap gap-1.5 p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur-md border border-white/15 shadow-md">
+    <button
+      onClick={() => setActiveTab("allocation")}
+      className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+        activeTab === "allocation"
+          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30"
+          : "text-slate-300 hover:text-white hover:bg-white/10"
+      }`}
+    >
+      1. Constrained Resource Allocation ({visibleWards.length})
+    </button>
+    <button
+      onClick={() => setActiveTab("overflow")}
+      className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+        activeTab === "overflow"
+          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30"
+          : "text-slate-300 hover:text-white hover:bg-white/10"
+      }`}
+    >
+      2. Hospital Surge &amp; Overflow Routing ({visibleTransfers.length})
+    </button>
+    <button
+      onClick={() => setActiveTab("simulator")}
+      className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+        activeTab === "simulator"
+          ? "bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-md shadow-red-600/30"
+          : "text-slate-300 hover:text-white hover:bg-white/10"
+      }`}
+    >
+      3. &ldquo;What-If&rdquo; Vector Control Simulator
+    </button>
+  </div>
+
+  {/* Tab 1: Allocation Table */}
+  {activeTab === "allocation" && (
+    <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="p-4 sm:p-5 bg-slate-950 text-white flex flex-wrap justify-between items-center gap-2">
+        <h3 className="font-extrabold text-sm sm:text-base tracking-tight">
+          Priority-Ranked Ward Supply &amp; Crew Allocation
+        </h3>
+        <span className="font-mono text-[11px] text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10">
+          Rates: 2.38 Saline • 1.16 Kits • 0.29 Beds / Case | Priority: Risk → Density → Cases
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+  <table className="w-full text-left text-sm">
+    <thead className="bg-slate-900 text-slate-200 font-mono text-[11px] uppercase tracking-wider border-b border-slate-800">
+      <tr>
+        <th className="py-3 px-3.5">Rank &amp; Ward</th>
+        <th className="py-3 px-3.5">Risk &amp; Cases</th>
+        <th className="py-3 px-3.5">Saline (Alloc/Req)</th>
+        <th className="py-3 px-3.5">Test Kits (Alloc/Req)</th>
+        <th className="py-3 px-3.5">Beds (Req/Cap)</th>
+        <th className="py-3 px-3.5">Crews</th>
+        <th className="py-3 px-3.5">Status / Dispatch</th>
+      </tr>
+    </thead>
+    <tbody className="divide-y divide-slate-200/80 bg-white">
+      {visibleWards.map((w) => {
+        const ow = overflowByWard[w.ward_id];
+        const bedCap = ow?.bed_capacity ?? 1;
+        const bedReq = w.required?.hospital_beds_required ?? 0;
+        return (
+          <tr
+            key={w.ward_id}
+            className="hover:bg-rose-50/40 transition-colors duration-150"
+          >
+            {/* Rank & Ward */}
+            <td className="py-3 px-3.5">
+              <div className="font-extrabold text-slate-900 tracking-tight">
+                <span className="font-mono text-xs font-bold text-rose-600 mr-1.5">
+                  #{w.rank}
+                </span>
+                {w.ward_id}
               </div>
-
-              {(allocationRes?.summary?.warnings || []).length > 0 && (
-                <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-300 text-xs font-bold text-red-800 space-y-1">
-                  {allocationRes.summary.warnings.map((w, idx) => (
-                    <div key={idx}>🚨 {w}</div>
-                  ))}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <p className="text-xs font-medium text-slate-500 uppercase">
-                    Projected Cases (+{horizon}W)
-                  </p>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {totalCases.toFixed(1)}
-                  </p>
-                  <p className="text-xs text-rose-600 mt-1">
-                    Across {visibleWards.length} active wards
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs font-medium text-slate-500 uppercase">
-                      Saline Allocation
-                    </p>
-                    <Droplets className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {totalSalineAlloc.toLocaleString()}{" "}
-                    <span className="text-sm font-normal text-slate-400">
-                      / {totalSalineReq.toLocaleString()}
-                    </span>
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Regional stock at {stockPercentage}%
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs font-medium text-slate-500 uppercase">
-                      Critical Deficit Wards
-                    </p>
-                    <AlertTriangle className="w-4 h-4 text-red-500" />
-                  </div>
-                  <p className="text-2xl font-bold text-red-600 mt-1">
-                    {deficitWardCount}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {supplyDeficitCount} supply deficit • {crewDeficitCount} crew short
-                  </p>
-                </div>
-
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs font-medium text-slate-500 uppercase">
-                      Overflow Transfers
-                    </p>
-                    <ArrowRightLeft className="w-4 h-4 text-amber-500" />
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900 mt-1">
-                    {totalRoutedPatients} Patients
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Intra-city bed balancing
-                  </p>
-                </div>
+              <div className="font-mono text-[11px] text-slate-500 mt-0.5">
+                {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
               </div>
+            </td>
 
-              <div className="flex flex-wrap gap-2 border-b border-slate-200 mb-6">
+            {/* Risk & Cases */}
+            <td className="py-3 px-3.5">
+              <span
+                className={`inline-flex items-center px-2.5 py-1 font-mono text-xs font-extrabold rounded-full border ${
+                  w.risk_level === "Critical"
+                    ? "bg-red-50 text-red-700 border-red-300"
+                    : w.risk_level === "High"
+                      ? "bg-orange-50 text-orange-700 border-orange-300"
+                      : w.risk_level === "Medium"
+                        ? "bg-amber-50 text-amber-800 border-amber-300"
+                        : "bg-emerald-50 text-emerald-700 border-emerald-300"
+                }`}
+              >
+                {w.risk_level} ({w.predicted_cases})
+              </span>
+            </td>
+
+            {/* Saline */}
+            <td className="py-3 px-3.5 font-mono text-xs whitespace-nowrap">
+              <span
+                className={
+                  w.deficit?.saline_bags_needed > 0
+                    ? "text-red-600 font-extrabold"
+                    : "text-blue-700 font-extrabold"
+                }
+              >
+                {w.allocated?.saline_bags_needed}
+              </span>{" "}
+              <span className="text-slate-400 font-medium">
+                / {w.required?.saline_bags_needed}
+              </span>
+            </td>
+
+            {/* Test Kits */}
+            <td className="py-3 px-3.5 font-mono text-xs whitespace-nowrap">
+              <span
+                className={
+                  w.deficit?.diagnostic_kits_needed > 0
+                    ? "text-red-600 font-extrabold"
+                    : "text-indigo-700 font-extrabold"
+                }
+              >
+                {w.allocated?.diagnostic_kits_needed}
+              </span>{" "}
+              <span className="text-slate-400 font-medium">
+                / {w.required?.diagnostic_kits_needed}
+              </span>
+            </td>
+
+            {/* Beds */}
+            <td className="py-3 px-3.5 font-mono text-xs whitespace-nowrap">
+              <span
+                className={
+                  bedReq > bedCap
+                    ? "text-amber-600 font-extrabold"
+                    : "text-teal-700 font-extrabold"
+                }
+              >
+                {bedReq}
+              </span>{" "}
+              <span className="text-slate-400 font-medium">/ {bedCap}</span>
+            </td>
+
+            {/* Crews */}
+            <td className="py-3 px-3.5 whitespace-nowrap">
+              <span className="inline-flex items-center gap-1.5 font-mono text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-200 px-2.5 py-1 rounded-lg">
+                <SprayCan className="w-3.5 h-3.5 text-rose-600" />
+                {w.crews_assigned}/{w.crews_needed}
+              </span>
+            </td>
+
+            {/* Status & Dispatch (Fully visible side-by-side) */}
+            <td className="py-3 px-3.5 whitespace-nowrap">
+              <div className="flex items-center gap-2">
+                {w.deficit_alert ? (
+                  <span className="px-2.5 py-1 font-mono text-[11px] font-extrabold bg-red-600 text-white rounded-lg shadow-2xs">
+                    DEFICIT ({w.fulfilment_pct}%)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 font-mono text-[11px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg">
+                    FULFILLED
+                  </span>
+                )}
                 <button
-                  onClick={() => setActiveTab("allocation")}
-                  className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${activeTab === "allocation"
-                      ? "border-rose-600 text-rose-600"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
+                  type="button"
+                  onClick={() => handleOpenDispatch(w.ward_id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-slate-900 hover:bg-gradient-to-r hover:from-red-600 hover:to-rose-600 text-white rounded-lg shadow-xs transition-all cursor-pointer"
                 >
-                  1. Constrained Resource Allocation ({visibleWards.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("overflow")}
-                  className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${activeTab === "overflow"
-                      ? "border-rose-600 text-rose-600"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                >
-                  2. Hospital Surge &amp; Overflow Routing ({visibleTransfers.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab("simulator")}
-                  className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${activeTab === "simulator"
-                      ? "border-rose-600 text-rose-600"
-                      : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                >
-                  3. &ldquo;What-If&rdquo; Vector Control Simulator
+                  <Send className="w-3 h-3 text-rose-400" /> Dispatch
                 </button>
               </div>
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+</div>
+    </div>
+  )}
 
-              {activeTab === "allocation" && (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-2">
-                    <h3 className="font-bold text-slate-800">
-                      Priority-Ranked Ward Supply &amp; Crew Allocation
-                    </h3>
-                    <span className="text-xs text-slate-500">
-                      Rates: 2.38 Saline • 1.16 Kits • 0.29 Beds / Case | Priority: Risk → Density → Cases
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
-                        <tr>
-                          <th className="py-3 px-4">Rank &amp; Ward</th>
-                          <th className="py-3 px-4">Risk &amp; Cases</th>
-                          <th className="py-3 px-4">Saline (Alloc/Req)</th>
-                          <th className="py-3 px-4">Test Kits (Alloc/Req)</th>
-                          <th className="py-3 px-4">Beds (Req/Cap)</th>
-                          <th className="py-3 px-4">Crews</th>
-                          <th className="py-3 px-4">Status / Dispatch</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {visibleWards.map((w) => {
-                          const ow = overflowByWard[w.ward_id];
-                          const bedCap = ow?.bed_capacity ?? 1;
-                          const bedReq = w.required?.hospital_beds_required ?? 0;
-                          return (
-                            <tr key={w.ward_id} className="hover:bg-slate-50/80">
-                              <td className="py-3 px-4">
-                                <div className="font-semibold text-slate-900">
-                                  <span className="text-slate-400 mr-1.5">#{w.rank}</span>
-                                  {w.ward_id}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                  {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
-                                </div>
-                              </td>
-                              <td className="py-3 px-4">
-                                <span
-                                  className={`inline-block px-2 py-0.5 text-xs font-bold rounded ${w.risk_level === "Critical"
-                                      ? "bg-red-100 text-red-700"
-                                      : w.risk_level === "High"
-                                        ? "bg-orange-100 text-orange-700"
-                                        : w.risk_level === "Medium"
-                                          ? "bg-amber-100 text-amber-700"
-                                          : "bg-emerald-100 text-emerald-700"
-                                    }`}
-                                >
-                                  {w.risk_level} ({w.predicted_cases})
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 font-mono text-xs">
-                                <span
-                                  className={
-                                    w.deficit?.saline_bags_needed > 0
-                                      ? "text-red-600 font-bold"
-                                      : "text-slate-800"
-                                  }
-                                >
-                                  {w.allocated?.saline_bags_needed}
-                                </span>{" "}
-                                / {w.required?.saline_bags_needed}
-                              </td>
-                              <td className="py-3 px-4 font-mono text-xs">
-                                <span
-                                  className={
-                                    w.deficit?.diagnostic_kits_needed > 0
-                                      ? "text-red-600 font-bold"
-                                      : "text-slate-800"
-                                  }
-                                >
-                                  {w.allocated?.diagnostic_kits_needed}
-                                </span>{" "}
-                                / {w.required?.diagnostic_kits_needed}
-                              </td>
-                              <td className="py-3 px-4 font-mono text-xs">
-                                <span
-                                  className={
-                                    bedReq > bedCap ? "text-amber-600 font-bold" : "text-slate-800"
-                                  }
-                                >
-                                  {bedReq}
-                                </span>{" "}
-                                / {bedCap}
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 px-2 py-1 rounded">
-                                  <SprayCan className="w-3 h-3 text-rose-600" /> {w.crews_assigned}/
-                                  {w.crews_needed}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="flex items-center gap-2">
-                                  {w.deficit_alert ? (
-                                    <span className="px-2 py-0.5 text-[11px] font-bold bg-red-600 text-white rounded">
-                                      DEFICIT ({w.fulfilment_pct}%)
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 text-[11px] font-semibold bg-emerald-100 text-emerald-700 rounded">
-                                      FULFILLED
-                                    </span>
-                                  )}
-                                  <button
-                                    onClick={() => handleOpenDispatch(w.ward_id)}
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-slate-900 text-white hover:bg-slate-800 rounded-md cursor-pointer"
-                                  >
-                                    <Send className="w-3 h-3" /> Dispatch
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "overflow" && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {visibleCities.map((c) => (
-                      <div
-                        key={c.city}
-                        className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm"
-                      >
-                        <div className="flex justify-between items-center mb-2">
-                          <h3 className="font-bold text-slate-800">{c.city}</h3>
-                          <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded ${c.utilization_pct > 100
-                                ? "bg-red-100 text-red-700"
-                                : c.utilization_pct > 85
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-emerald-100 text-emerald-700"
-                              }`}
-                          >
-                            {c.utilization_pct}% Utilized
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2">
-                          <div
-                            className={`h-full ${c.utilization_pct > 100 ? "bg-red-600" : "bg-rose-500"
-                              }`}
-                            style={{ width: `${Math.min(100, c.utilization_pct)}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-xs text-slate-500">
-                          <span>
-                            Demand: {c.total_demand} / {c.total_capacity} beds
-                          </span>
-                          <span>Headroom: {c.headroom_after} free</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                    <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
-                      <BedDouble className="w-5 h-5 text-rose-600" />
-                      Automated Intra-City Overflow Patient Transfers
-                    </h3>
-                    {visibleTransfers.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        No cross-ward hospital overflow detected for this horizon/date. Try +3 Weeks or 2025-08-25.
-                      </p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {visibleTransfers.map((r, idx) => (
-                          <div
-                            key={idx}
-                            className="flex flex-wrap items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800"
-                          >
-                            <div className="flex items-center gap-2 font-medium">
-                              <span className="text-xs font-bold uppercase px-2 py-0.5 bg-white border rounded">
-                                {r.city}
-                              </span>
-                              <span className="font-bold text-rose-700">{r.from_ward}</span>
-                              <span>➔</span>
-                              <span className="font-bold text-emerald-700">{r.to_ward}</span>
-                            </div>
-                            <div className="text-xs font-semibold text-slate-700">
-                              {r.patients} Patient(s) Routed Intra-City
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "simulator" && (
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <TrendingDown className="w-5 h-5 text-emerald-600" />
-                        Model-Driven 2-to-4-Week Vector Control Impact Simulator
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        {simRes?.preview_mode
-                          ? "Showing 2-crew benchmark across all wards — click +/- on any ward to simulate custom deployment"
-                          : "Simulating your custom crew deployment through Random Forest 2W → 3W → 4W models"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {!simRes?.preview_mode && (
-                        <button
-                          onClick={() => setDeployedCrews({})}
-                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
-                        >
-                          Reset Benchmark
-                        </button>
-                      )}
-                      <div className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg">
-                        Cases Prevented: {simRes?.summary?.total_cases_prevented ?? 0} | Beds Saved:{" "}
-                        {simRes?.summary?.total_beds_saved ?? 0} | Saline Saved:{" "}
-                        {simRes?.summary?.total_saline_saved ?? 0}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-50 text-slate-600 text-xs uppercase border-b border-slate-200">
-                        <tr>
-                          <th className="py-3 px-4">ROI Rank &amp; Ward</th>
-                          <th className="py-3 px-4">Deploy Crews</th>
-                          <th className="py-3 px-4">Baseline ➔ Simulated (2–4W)</th>
-                          <th className="py-3 px-4">Beds Saved</th>
-                          <th className="py-3 px-4">Saline Saved</th>
-                          <th className="py-3 px-4">ROI (Cases / Crew)</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {visibleSimWards.map((w) => {
-                          const activeCrews = simRes?.preview_mode
-                            ? w.crews_deployed
-                            : deployedCrews[w.ward_id] || 0;
-                          return (
-                            <tr key={w.ward_id} className="hover:bg-slate-50">
-                              <td className="py-3 px-4">
-                                <span className="font-bold text-slate-400 mr-2">#{w.roi_rank}</span>
-                                <span className="font-semibold text-slate-900">{w.ward_id}</span>
-                                <span className="block text-xs text-slate-500 ml-6">
-                                  {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
-                                </span>
-                              </td>
-                              <td className="py-3 px-4">
-                                <div className="inline-flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                                  <button
-                                    onClick={() => updateCrewCount(w.ward_id, -1)}
-                                    className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="w-6 text-center font-bold text-xs">
-                                    {activeCrews}
-                                  </span>
-                                  <button
-                                    onClick={() => updateCrewCount(w.ward_id, 1)}
-                                    className="w-6 h-6 rounded bg-white shadow text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-                                  >
-                                    +
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="py-3 px-4 font-mono text-xs">
-                                <span className="text-slate-500 line-through mr-1">
-                                  {w.baseline_cases?.total}
-                                </span>
-                                ➔{" "}
-                                <span className="font-bold text-emerald-700">
-                                  {w.simulated_cases?.total}
-                                </span>{" "}
-                                {w.cases_prevented > 0 && (
-                                  <span className="text-emerald-600 font-semibold">
-                                    (-{w.cases_prevented})
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                                -{w.beds_saved} beds
-                              </td>
-                              <td className="py-3 px-4 text-xs font-semibold text-slate-700">
-                                -{w.saline_saved} bags
-                              </td>
-                              <td className="py-3 px-4">
-                                <span className="px-2.5 py-1 text-xs font-bold rounded bg-emerald-100 text-emerald-800">
-                                  {w.roi_cases_per_crew} cases/crew
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+  {/* Tab 2: Hospital Surge & Overflow */}
+  {activeTab === "overflow" && (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {visibleCities.map((c) => (
+          <div
+            key={c.city}
+            className="bg-white/95 backdrop-blur-md p-5 rounded-2xl border border-slate-200 shadow-sm"
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-extrabold text-slate-900">{c.city}</h3>
+              <span
+                className={`font-mono text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                  c.utilization_pct > 100
+                    ? "bg-red-100 text-red-700 border-red-200"
+                    : c.utilization_pct > 85
+                      ? "bg-amber-100 text-amber-700 border-amber-200"
+                      : "bg-emerald-100 text-emerald-700 border-emerald-200"
+                }`}
+              >
+                {c.utilization_pct}% Utilized
+              </span>
             </div>
+            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden mb-2.5">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  c.utilization_pct > 100
+                    ? "bg-gradient-to-r from-red-600 to-rose-500"
+                    : "bg-gradient-to-r from-rose-500 to-amber-400"
+                }`}
+                style={{ width: `${Math.min(100, c.utilization_pct)}%` }}
+              />
+            </div>
+            <div className="flex justify-between font-mono text-[11px] text-slate-500">
+              <span>
+                Demand: {c.total_demand} / {c.total_capacity} beds
+              </span>
+              <span className="font-semibold text-slate-700">
+                Headroom: {c.headroom_after} free
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm p-5">
+        <h3 className="font-extrabold text-slate-900 mb-3.5 flex items-center gap-2">
+          <BedDouble className="w-5 h-5 text-rose-600" />
+          Automated Intra-City Overflow Patient Transfers
+        </h3>
+        {visibleTransfers.length === 0 ? (
+          <p className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            No cross-ward hospital overflow detected for this horizon/date. Try +3 Weeks or 2025-08-25.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {visibleTransfers.map((r, idx) => (
+              <div
+                key={idx}
+                className="flex flex-wrap items-center justify-between gap-2 p-3.5 rounded-xl border border-slate-200 bg-slate-50/90 text-sm text-slate-800"
+              >
+                <div className="flex items-center gap-2.5 font-medium">
+                  <span className="font-mono text-[11px] font-bold uppercase px-2.5 py-0.5 bg-slate-900 text-white rounded-md">
+                    {r.city}
+                  </span>
+                  <span className="font-bold text-rose-700">{r.from_ward}</span>
+                  <span className="text-slate-400">➔</span>
+                  <span className="font-bold text-emerald-700">{r.to_ward}</span>
+                </div>
+                <div className="font-mono text-xs font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700">
+                  {r.patients} Patient(s) Routed Intra-City
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )}
+
+  {/* Tab 3: What-If Vector Control Simulator */}
+  {activeTab === "simulator" && (
+    <div className="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="p-4 sm:p-5 bg-slate-950 text-white flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-extrabold text-sm sm:text-base flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-emerald-400" />
+            Model-Driven 2-to-4-Week Vector Control Impact Simulator
+          </h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            {simRes?.preview_mode
+              ? "Showing 2-crew benchmark across all wards — click +/- on any ward to simulate custom deployment"
+              : "Simulating your custom crew deployment through Random Forest 2W → 3W → 4W models"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!simRes?.preview_mode && (
+            <button
+              onClick={() => setDeployedCrews({})}
+              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 cursor-pointer transition"
+            >
+              Reset Benchmark
+            </button>
+          )}
+          <div className="font-mono text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 rounded-xl">
+            Cases Prevented: {simRes?.summary?.total_cases_prevented ?? 0} | Beds Saved:{" "}
+            {simRes?.summary?.total_beds_saved ?? 0} | Saline Saved:{" "}
+            {simRes?.summary?.total_saline_saved ?? 0}
+          </div>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm min-w-[740px]">
+          <thead className="bg-slate-100/90 text-slate-600 font-mono text-[11px] uppercase border-b border-slate-200">
+            <tr>
+              <th className="py-3.5 px-4">ROI Rank &amp; Ward</th>
+              <th className="py-3.5 px-4">Deploy Crews</th>
+              <th className="py-3.5 px-4">Baseline ➔ Simulated (2–4W)</th>
+              <th className="py-3.5 px-4">Beds Saved</th>
+              <th className="py-3.5 px-4">Saline Saved</th>
+              <th className="py-3.5 px-4">ROI (Cases / Crew)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {visibleSimWards.map((w) => {
+              const activeCrews = simRes?.preview_mode
+                ? w.crews_deployed
+                : deployedCrews[w.ward_id] || 0;
+              return (
+                <tr key={w.ward_id} className="hover:bg-slate-50/90 transition-colors">
+                  <td className="py-3.5 px-4">
+                    <span className="font-mono text-xs font-bold text-slate-400 mr-2">#{w.roi_rank}</span>
+                    <span className="font-bold text-slate-900">{w.ward_id}</span>
+                    <span className="block text-xs text-slate-500 ml-6">
+                      {w.city} • {Number(w.population_density_sqkm).toLocaleString()}/km²
+                    </span>
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <div className="inline-flex items-center gap-2 bg-slate-900 text-white rounded-xl p-1 shadow-2xs">
+                      <button
+                        onClick={() => updateCrewCount(w.ward_id, -1)}
+                        className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold cursor-pointer transition"
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center font-mono font-bold text-xs">
+                        {activeCrews}
+                      </span>
+                      <button
+                        onClick={() => updateCrewCount(w.ward_id, 1)}
+                        className="w-6 h-6 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold cursor-pointer transition"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-4 font-mono text-xs">
+                    <span className="text-slate-400 line-through mr-1.5">
+                      {w.baseline_cases?.total}
+                    </span>
+                    ➔{" "}
+                    <span className="font-bold text-emerald-700">
+                      {w.simulated_cases?.total}
+                    </span>{" "}
+                    {w.cases_prevented > 0 && (
+                      <span className="text-emerald-600 font-bold">
+                        (-{w.cases_prevented})
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700">
+                    -{w.beds_saved} beds
+                  </td>
+                  <td className="py-3.5 px-4 font-mono text-xs font-bold text-slate-700">
+                    -{w.saline_saved} bags
+                  </td>
+                  <td className="py-3.5 px-4">
+                    <span className="px-2.5 py-1 font-mono text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      {w.roi_cases_per_crew} cases/crew
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</div>
           </div>
         </Navbar>
       </div>
